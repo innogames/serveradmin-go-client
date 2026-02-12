@@ -2,7 +2,6 @@ package adminapi
 
 import (
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,20 +9,18 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	// clear env to not have configs from host here
-	os.Clearenv()
-
 	// make a test without SERVERADMIN_BASE_URL set
+	t.Setenv("SERVERADMIN_BASE_URL", "")
 	_, err := loadConfig()
 	require.Error(t, err, "env var SERVERADMIN_BASE_URL not set")
 
 	// spawn mocked serveradmin server
 	server := httptest.NewServer(nil)
 	defer server.Close()
-	_ = os.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
 
 	t.Run("load static token", func(t *testing.T) {
-		_ = os.Setenv("SERVERADMIN_TOKEN", "jolo")
+		t.Setenv("SERVERADMIN_TOKEN", "jolo")
 		cfg, err := loadConfig()
 
 		require.NoError(t, err)
@@ -32,7 +29,7 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("load valid private key", func(t *testing.T) {
-		_ = os.Setenv("SERVERADMIN_KEY_PATH", "testdata/test.key")
+		t.Setenv("SERVERADMIN_KEY_PATH", "testdata/test.key")
 		cfg, err := loadConfig()
 
 		require.NoError(t, err)
@@ -41,7 +38,7 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("load invalid private Key", func(t *testing.T) {
-		_ = os.Setenv("SERVERADMIN_KEY_PATH", "testdata/nope.key")
+		t.Setenv("SERVERADMIN_KEY_PATH", "testdata/nope.key")
 		_, err := loadConfig()
 
 		assert.Error(t, err, "failed to read private key from testdata/nope.key: open testdata/nope.key: no such file or directory")

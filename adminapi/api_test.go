@@ -4,7 +4,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sync"
 	"testing"
 
@@ -37,9 +36,8 @@ func TestFakeServer(t *testing.T) {
 	defer server.Close()
 
 	resetConfig()
-	os.Clearenv()
-	_ = os.Setenv("SERVERADMIN_TOKEN", "1234567890")
-	_ = os.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	t.Setenv("SERVERADMIN_TOKEN", "1234567890")
+	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
 
 	query := NewQuery(Filters{
 		"hostname": Any(Regexp("test.foo.local"), Regexp(".*\\.bar.local")),
@@ -55,9 +53,9 @@ func TestFakeServer(t *testing.T) {
 	assert.Equal(t, "foo.bar.local", object.GetString("hostname"))
 	assert.Equal(t, 483903, object.Get("object_id"))
 	assert.Equal(t, 483903, object.ObjectID())
-	assert.Nil(t, object.GetString("object_id"))
+	assert.Empty(t, object.GetString("object_id"))
 	assert.Nil(t, object.Get("nope"))
-	assert.Nil(t, object.GetString("nope"))
+	assert.Empty(t, object.GetString("nope"))
 
 	one, err := query.One()
 	require.NoError(t, err)
@@ -159,9 +157,8 @@ func TestHTTPErrorHandling(t *testing.T) {
 			defer server.Close()
 
 			resetConfig()
-			os.Clearenv()
-			_ = os.Setenv("SERVERADMIN_TOKEN", "1234567890")
-			_ = os.Setenv("SERVERADMIN_BASE_URL", server.URL)
+			t.Setenv("SERVERADMIN_TOKEN", "1234567890")
+			t.Setenv("SERVERADMIN_BASE_URL", server.URL)
 
 			query := NewQuery(Filters{
 				"hostname": Regexp("test.local"),
