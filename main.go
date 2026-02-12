@@ -33,7 +33,7 @@ func main() {
 	}
 
 	attributeList := strings.Split(attributes, ",")
-	q.SetAttributes(attributeList)
+	q.SetAttributes(attributeList...)
 	q.OrderBy(orderBy)
 
 	servers, err := q.All()

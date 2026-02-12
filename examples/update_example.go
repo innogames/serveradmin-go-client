@@ -4,32 +4,15 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/innogames/serveradmin-go-client/adminapi"
+	api "github.com/innogames/serveradmin-go-client/adminapi"
 )
 
-// Example demonstrating how to update server objects
-func main() {
-	// Example 1: Update a single object
-	singleObjectExample()
-
-	// Example 2: Update multiple objects in batch
-	multiObjectExample()
-
-	// Example 3: Create a new object
-	createObjectExample()
-
-	// Example 4: Delete an object
-	deleteObjectExample()
-
-	// Example 5: Rollback changes
-	rollbackExample()
-}
-
 func singleObjectExample() {
-	q, err := adminapi.FromQuery("hostname=webserver01")
+	q, err := api.FromQuery("hostname=webserver01")
 	if err != nil {
 		log.Fatal(err)
 	}
+	q.AddAttributes("backup_disabled")
 
 	server, err := q.One()
 	if err != nil {
@@ -38,7 +21,6 @@ func singleObjectExample() {
 
 	// Modify attributes
 	server.Set("backup_disabled", true)
-	server.Set("comment", "Updated via Go client")
 
 	// Commit changes
 	commitID, err := server.Commit()
@@ -50,21 +32,19 @@ func singleObjectExample() {
 }
 
 func multiObjectExample() {
-	q, err := adminapi.FromQuery("environment=production state=online")
+	q, err := api.FromQuery("environment=production state=online")
 	if err != nil {
 		log.Fatal(err)
 	}
-	q.SetAttributes([]string{"hostname", "backup_disabled", "object_id"})
+	q.SetAttributes("hostname", "backup_disabled")
 
 	servers, err := q.All()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Update all servers
-	for _, server := range servers {
-		server.Set("backup_disabled", false)
-	}
+	// Update all servers using batch Set()
+	servers.Set("backup_disabled", false)
 
 	// Commit all changes in a single API call
 	commitID, err := servers.Commit()
@@ -77,7 +57,7 @@ func multiObjectExample() {
 
 func createObjectExample() {
 	// Create a new VM object
-	newVM, err := adminapi.NewObject("vm")
+	newVM, err := api.NewObject("vm")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,7 +77,7 @@ func createObjectExample() {
 }
 
 func deleteObjectExample() {
-	q, err := adminapi.FromQuery("hostname=oldserver.example.com")
+	q, err := api.FromQuery("hostname=oldserver.example.com")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -119,8 +99,31 @@ func deleteObjectExample() {
 	fmt.Printf("Deleted server (commit %d)\n", commitID)
 }
 
+func batchDeleteExample() {
+	q, err := api.FromQuery("state=decommissioned")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	servers, err := q.All()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Delete ALL decommissioned servers using batch Delete()
+	servers.Delete()
+
+	// Commit all deletions in a single API call
+	commitID, err := servers.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Deleted %d servers (commit %d)\n", len(servers), commitID)
+}
+
 func rollbackExample() {
-	q, err := adminapi.FromQuery("hostname=webserver01")
+	q, err := api.FromQuery("hostname=webserver01")
 	if err != nil {
 		log.Fatal(err)
 	}

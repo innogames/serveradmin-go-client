@@ -56,8 +56,8 @@ func TestParseQuery(t *testing.T) {
 		},
 		{
 			name:  "All with mixed types",
-			query: "meta=all(1 server true)",
-			want:  Filters{"meta": Filter{"All": []any{1, "server", true}}},
+			query: "hypervisor=all(1 server true)",
+			want:  Filters{"hypervisor": Filter{"All": []any{1, "server", true}}},
 		},
 		{
 			name:  "Nested filters",

@@ -31,7 +31,7 @@ func TestFakeServer(t *testing.T) {
 	query := NewQuery(Filters{
 		"hostname": Any(Regexp("test.foo.local"), Regexp(".*\\.bar.local")),
 	})
-	query.SetAttributes([]string{"hostname"})
+	query.SetAttributes("hostname")
 
 	servers, err := query.All()
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestHTTPErrorHandling(t *testing.T) {
 			query := NewQuery(Filters{
 				"hostname": Regexp("test.local"),
 			})
-			query.SetAttributes([]string{"hostname"})
+			query.SetAttributes("hostname")
 
 			servers, err := query.All()
 			require.Error(t, err)

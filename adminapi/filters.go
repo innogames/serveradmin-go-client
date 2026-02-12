@@ -40,6 +40,10 @@ func Not[V valueOrFilter](filter V) Filter {
 	return createFilter("Not", filter)
 }
 
+func NotEmpty() Filter {
+	return Not(Empty())
+}
+
 func Any[V valueOrFilter](values ...V) Filter {
 	return createFilter("Any", values)
 }

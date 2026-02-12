@@ -2,6 +2,7 @@ package adminapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -39,6 +40,28 @@ func (s ServerObjects) Commit() (int, error) {
 func (s ServerObjects) Rollback() {
 	for _, obj := range s {
 		obj.Rollback()
+	}
+}
+
+// Set calls Set(key, value) on each ServerObject in the slice.
+// If any Set operation fails, all errors are collected and returned
+// as a joined error. This allows identifying all problematic objects
+// in a single call rather than failing on the first error.
+func (s ServerObjects) Set(key string, value any) error {
+	var errs []error
+	for i, obj := range s {
+		if err := obj.Set(key, value); err != nil {
+			errs = append(errs, fmt.Errorf("object %d (id=%v): %w", i, obj.Get("object_id"), err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// Delete calls Delete() on each ServerObject in the slice.
+// This marks all objects for deletion on the next Commit().
+func (s ServerObjects) Delete() {
+	for _, obj := range s {
+		obj.Delete()
 	}
 }
 

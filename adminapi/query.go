@@ -34,8 +34,12 @@ func NewQuery(filters Filters) Query {
 	}
 }
 
-func (q *Query) SetAttributes(attributes []string) {
+func (q *Query) SetAttributes(attributes ...string) {
 	q.restrictedAttributes = attributes
+}
+
+func (q *Query) AddAttributes(attributes ...string) {
+	q.restrictedAttributes = append(q.restrictedAttributes, attributes...)
 }
 
 func (q *Query) OrderBy(attribute string) {
