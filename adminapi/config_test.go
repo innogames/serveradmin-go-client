@@ -20,7 +20,12 @@ func TestLoadConfig(t *testing.T) {
 	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
 
 	t.Run("load static token", func(t *testing.T) {
+		// Unset SSH-related env vars to prevent SSH agent from taking precedence
+		t.Setenv("SSH_AUTH_SOCK", "")
+		t.Setenv("SERVERADMIN_KEY_PATH", "")
 		t.Setenv("SERVERADMIN_TOKEN", "jolo")
+
+		resetConfig()
 		cfg, err := loadConfig()
 
 		require.NoError(t, err)
@@ -29,7 +34,10 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("load valid private key", func(t *testing.T) {
+		t.Setenv("SSH_AUTH_SOCK", "")
 		t.Setenv("SERVERADMIN_KEY_PATH", "testdata/test.key")
+
+		resetConfig()
 		cfg, err := loadConfig()
 
 		require.NoError(t, err)
@@ -38,7 +46,10 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("load invalid private Key", func(t *testing.T) {
+		t.Setenv("SSH_AUTH_SOCK", "")
 		t.Setenv("SERVERADMIN_KEY_PATH", "testdata/nope.key")
+
+		resetConfig()
 		_, err := loadConfig()
 
 		assert.Error(t, err, "failed to read private key from testdata/nope.key: open testdata/nope.key: no such file or directory")

@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1" //nolint:gosec // SHA1 is required by the protocol
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,46 +20,8 @@ import (
 const (
 	apiEndpointQuery     = "/api/dataset/query"
 	apiEndpointNewObject = "/api/dataset/new_object"
+	apiEndpointCommit    = "/api/dataset/commit"
 )
-
-// ServerObjects is a slice of ServerObjects
-type ServerObjects []ServerObject
-
-// ServerObject is a map of key-value attributes of a SA object
-type ServerObject struct {
-	// the actual SA attributes of the object
-	attributes map[string]any
-	// todo: place for dirty changes + .Set()/.Commit() etc here
-}
-
-// Get safely retrieves an attribute, converting JSON float64 numbers to int when needed
-func (s ServerObject) Get(attribute string) any {
-	if val, ok := s.attributes[attribute]; ok {
-		if floatVal, isFloat := val.(float64); isFloat {
-			return int(floatVal)
-		}
-		return val
-	}
-	return nil
-}
-
-// GetString safely retrieves an attribute as a string
-func (s ServerObject) GetString(attribute string) string {
-	val := s.Get(attribute)
-	if strVal, isString := val.(string); isString {
-		return strVal
-	}
-	return ""
-}
-
-// ObjectID returns the "object_id" attribute of the ServerObject
-func (s ServerObject) ObjectID() int {
-	val := s.Get("object_id")
-	if id, ok := val.(int); ok {
-		return id
-	}
-	return 0
-}
 
 func sendRequest(endpoint string, postData any) (*http.Response, error) {
 	config, err := getConfig()
@@ -160,24 +119,4 @@ type gzipReadCloser struct {
 // Close closes the gzip.Reader and the underlying body.
 func (grc *gzipReadCloser) Close() error {
 	return errors.Join(grc.gz.Close(), grc.body.Close())
-}
-
-// calcSecurityToken calculates HMAC-SHA1 of timestamp:data
-func calcSecurityToken(authToken []byte, timestamp int64, data []byte) string {
-	mac := hmac.New(sha1.New, authToken)
-	mac.Write(calcMessage(timestamp, data))
-
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
-// calcMessage efficiently concatenates timestamp:data without redundant allocations
-func calcMessage(timestamp int64, data []byte) []byte {
-	return append(append(strconv.AppendInt(nil, timestamp, 10), ':'), data...)
-}
-
-// calcAppID computes SHA-1 hash of the auth token
-func calcAppID(authToken []byte) string {
-	hash := sha1.Sum(authToken) //nolint:gosec // SHA1 is required by the protocol
-
-	return hex.EncodeToString(hash[:])
 }

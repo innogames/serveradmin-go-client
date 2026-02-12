@@ -67,14 +67,14 @@ func (q *Query) All() (ServerObjects, error) {
 }
 
 // One returns exactly one matching SA object. If there is none or more than one, an error is returned.
-func (q *Query) One() (ServerObject, error) {
+func (q *Query) One() (*ServerObject, error) {
 	err := q.load()
 	if err != nil {
-		return ServerObject{}, err
+		return nil, err
 	}
 
 	if len(q.serverObjects) != 1 {
-		return ServerObject{}, fmt.Errorf("expected exactly one server object, got %d", len(q.serverObjects))
+		return nil, fmt.Errorf("expected exactly one server object, got %d", len(q.serverObjects))
 	}
 
 	return q.serverObjects[0], nil
@@ -108,8 +108,9 @@ func (q *Query) load() error {
 	// map attribute map into ServerObject objects
 	q.serverObjects = make(ServerObjects, len(respServer.Result))
 	for idx, object := range respServer.Result {
-		q.serverObjects[idx] = ServerObject{
+		q.serverObjects[idx] = &ServerObject{
 			attributes: object,
+			oldValues:  map[string]any{},
 		}
 	}
 	q.loaded = true
@@ -118,8 +119,10 @@ func (q *Query) load() error {
 }
 
 // NewObject creates a new server object (fetches default attributes from SA)
-func NewObject(serverType string) (ServerObject, error) {
-	server := ServerObject{}
+func NewObject(serverType string) (*ServerObject, error) {
+	server := &ServerObject{
+		oldValues: map[string]any{},
+	}
 
 	// Use url.Values for safe query string encoding
 	params := url.Values{}
@@ -128,13 +131,18 @@ func NewObject(serverType string) (ServerObject, error) {
 
 	resp, err := sendRequest(fullURL, nil)
 	if err != nil {
-		return server, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	err = json.NewDecoder(resp.Body).Decode(&server.attributes)
+	if err := json.NewDecoder(resp.Body).Decode(&server.attributes); err != nil {
+		return nil, err
+	}
 
-	return server, err
+	// Ensure object_id is nil so CommitState() returns "created"
+	server.attributes["object_id"] = nil
+
+	return server, nil
 }
 
 // like {"Filters": {"hostname": {"Regexp": "foo.local.*"}}, "restrict": ["hostname", "object_id"]}

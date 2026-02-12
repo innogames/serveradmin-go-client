@@ -34,6 +34,7 @@ func main() {
 
 	attributeList := strings.Split(attributes, ",")
 	q.SetAttributes(attributeList)
+	q.OrderBy(orderBy)
 
 	servers, err := q.All()
 	if err != nil {
@@ -52,14 +53,4 @@ func main() {
 		}
 		fmt.Print("\n")
 	}
-
-	/* examples
-	server := q.One()
-	q.Set("backup_disabled", "true")
-	q.Commit()
-
-	new, err := adminapi.NewServer("vm")
-	new.Set("hostname", "test")
-	new.Commit()
-	*/
 }
