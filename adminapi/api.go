@@ -99,6 +99,29 @@ func sendRequest(endpoint string, postData any) (*http.Response, error) {
 		return nil, err
 	}
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("HTTP error %d %s (failed to read error details: %w)",
+				resp.StatusCode, http.StatusText(resp.StatusCode), readErr)
+		}
+
+		var nestedErrorResp struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if jsonErr := json.Unmarshal(bodyBytes, &nestedErrorResp); jsonErr == nil && nestedErrorResp.Error.Message != "" {
+			return nil, fmt.Errorf("HTTP error %d %s: %s",
+				resp.StatusCode, http.StatusText(resp.StatusCode), nestedErrorResp.Error.Message)
+		}
+
+		// If body is empty, just return the status code
+		return nil, fmt.Errorf("HTTP error %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	}
+
 	// If the server responded with gzip encoding, wrap the response body accordingly.
 	if resp.Header.Get("Content-Encoding") == "gzip" {
 		gz, err := gzip.NewReader(resp.Body)

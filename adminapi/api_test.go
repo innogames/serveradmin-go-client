@@ -5,11 +5,21 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Because getConfig in config.go calls sync.OnceValues, the new values set to
+// SERVERADMIN_BASE_URL between test runs is never changed, as getConfig returns
+// cached values.
+// We use resetConfig() to reinitialize things, forcing getConfig() to return the
+// values from the new env variables.
+func resetConfig() {
+	getConfig = sync.OnceValues(loadConfig)
+}
 
 func TestFakeServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -26,6 +36,7 @@ func TestFakeServer(t *testing.T) {
 	}))
 	defer server.Close()
 
+	resetConfig()
 	os.Clearenv()
 	_ = os.Setenv("SERVERADMIN_TOKEN", "1234567890")
 	_ = os.Setenv("SERVERADMIN_BASE_URL", server.URL)
@@ -102,5 +113,66 @@ func BenchmarkCalcSecurityToken(b *testing.B) {
 	authToken := []byte("1234567898")
 	for b.Loop() {
 		calcSecurityToken(authToken, now, message)
+	}
+}
+
+// TestHTTPErrorHandling verifies that HTTP error codes are properly captured and reported
+func TestHTTPErrorHandling(t *testing.T) {
+	testCases := []struct {
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedError string
+	}{
+		{
+			name:          "400 Bad Request - ValidationError",
+			statusCode:    400,
+			responseBody:  `{"error": {"message": "Bad Request: Invalid filter format"}}`,
+			expectedError: "HTTP error 400 Bad Request: Bad Request: Invalid filter format",
+		},
+		{
+			name:          "400 Bad Request - FilterValueError",
+			statusCode:    400,
+			responseBody:  `{"error": {"message": "Bad Request: hostname must be a string"}}`,
+			expectedError: "HTTP error 400 Bad Request: Bad Request: hostname must be a string",
+		},
+		{
+			name:          "403 Forbidden - PermissionDenied",
+			statusCode:    403,
+			responseBody:  `{"error": {"message": "Forbidden: No known public key found"}}`,
+			expectedError: "HTTP error 403 Forbidden: Forbidden: No known public key found",
+		},
+		{
+			name:          "404 Not Found - ObjectDoesNotExist",
+			statusCode:    404,
+			responseBody:  `{"error": {"message": "Not Found: Server object with id 12345 does not exist"}}`,
+			expectedError: "HTTP error 404 Not Found: Not Found: Server object with id 12345 does not exist",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.statusCode)
+				_, _ = w.Write([]byte(tc.responseBody))
+			}))
+			defer server.Close()
+
+			resetConfig()
+			os.Clearenv()
+			_ = os.Setenv("SERVERADMIN_TOKEN", "1234567890")
+			_ = os.Setenv("SERVERADMIN_BASE_URL", server.URL)
+
+			query := NewQuery(Filters{
+				"hostname": Regexp("test.local"),
+			})
+			query.SetAttributes([]string{"hostname"})
+
+			servers, err := query.All()
+			require.Error(t, err)
+			assert.Nil(t, servers)
+			assert.Contains(t, err.Error(), tc.expectedError)
+			assert.NotContains(t, err.Error(), "expected exactly one server object")
+		})
 	}
 }
