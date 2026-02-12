@@ -35,18 +35,6 @@ func TestSetNonexistent(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not exist")
 }
 
-func TestSetOnDeleted(t *testing.T) {
-	obj := &ServerObject{
-		attributes: map[string]any{"hostname": "test", "object_id": float64(1)},
-		oldValues:  map[string]any{},
-		deleted:    true,
-	}
-
-	err := obj.Set("hostname", "new")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "deleted")
-}
-
 func TestCommitState(t *testing.T) {
 	// Consistent: no changes
 	obj := &ServerObject{

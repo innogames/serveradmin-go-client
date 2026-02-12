@@ -2,11 +2,21 @@ package adminapi
 
 import (
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Because getConfig in config.go calls sync.OnceValues, the new values set to
+// SERVERADMIN_BASE_URL between test runs is never changed, as getConfig returns
+// cached values.
+// We use resetConfig() to reinitialize things, forcing getConfig() to return the
+// values from the new env variables.
+func resetConfig() {
+	getConfig = sync.OnceValues(loadConfig)
+}
 
 func TestLoadConfig(t *testing.T) {
 	// make a test without SERVERADMIN_BASE_URL set

@@ -2,7 +2,6 @@ package adminapi
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 )
 
@@ -47,9 +46,6 @@ func (s *ServerObject) ObjectID() int {
 
 // Set modifies an attribute value and tracks the change for commit.
 func (s *ServerObject) Set(key string, value any) error {
-	if s.deleted {
-		return errors.New("cannot set attributes on a deleted object")
-	}
 	if _, exists := s.attributes[key]; !exists {
 		return fmt.Errorf("attribute %q does not exist", key)
 	}
