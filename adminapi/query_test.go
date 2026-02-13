@@ -60,3 +60,11 @@ func TestFromQuery(t *testing.T) {
 		"instance": 1,
 	}, q.filters)
 }
+
+func TestFromQueryWithError(t *testing.T) {
+	q, err := FromQuery("hostname=not(empty(")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unmatched ( found")
+	assert.Equal(t, Query{}, q, "query should be zero value on error")
+}

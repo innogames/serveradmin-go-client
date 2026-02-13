@@ -8,9 +8,9 @@ import (
 
 // commitRequest is the payload sent to /api/dataset/commit
 type commitRequest struct {
-	Created []map[string]any `json:"created"`
-	Changed []map[string]any `json:"changed"`
-	Deleted []any            `json:"deleted"`
+	Created []Attributes `json:"created"`
+	Changed []Attributes `json:"changed"`
+	Deleted []int        `json:"deleted"` // the object-ids
 }
 
 type commitResponse struct {
@@ -79,19 +79,21 @@ func (s *ServerObject) Commit() (int, error) {
 
 func buildCommit(objects ServerObjects) commitRequest {
 	commit := commitRequest{
-		Created: []map[string]any{},
-		Changed: []map[string]any{},
-		Deleted: []any{},
+		Created: []Attributes{},
+		Changed: []Attributes{},
+		Deleted: []int{}, // the object-ids
 	}
 
 	for _, obj := range objects {
 		switch obj.CommitState() {
-		case "created":
+		case StateCreated:
 			commit.Created = append(commit.Created, obj.attributes)
-		case "changed":
+		case StateChanged:
 			commit.Changed = append(commit.Changed, obj.serializeChanges())
-		case "deleted":
-			commit.Deleted = append(commit.Deleted, obj.Get("object_id"))
+		case StateDeleted:
+			commit.Deleted = append(commit.Deleted, obj.ObjectID())
+		case StateConsistent:
+			// No changes to commit
 		}
 	}
 

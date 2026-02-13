@@ -3,7 +3,6 @@ package adminapi
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"slices"
 )
 
@@ -14,6 +13,15 @@ type Query struct {
 	orderBy              string
 	loaded               bool
 	serverObjects        ServerObjects
+}
+
+// Attributes is a map of attributes, indexed by attribute name
+type Attributes map[string]any
+
+// Has checks if the given key exists in the attributes map
+func (a Attributes) Has(key string) bool {
+	_, ok := a[key]
+	return ok
 }
 
 // FromQuery creates a new Query object from a query string
@@ -75,17 +83,21 @@ func (q *Query) All() (ServerObjects, error) {
 }
 
 // One returns exactly one matching SA object. If there is none or more than one, an error is returned.
+// Returns ErrNoResults if no objects match, or a wrapped ErrMultipleResults if more than one matches.
 func (q *Query) One() (*ServerObject, error) {
 	err := q.load()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(q.serverObjects) != 1 {
-		return nil, fmt.Errorf("expected exactly one server object, got %d", len(q.serverObjects))
+	switch len(q.serverObjects) {
+	case 1:
+		return q.serverObjects[0], nil
+	case 0:
+		return nil, ErrNoResults
+	default:
+		return nil, fmt.Errorf("got %d: %w", len(q.serverObjects), ErrMultipleResults)
 	}
-
-	return q.serverObjects[0], nil
 }
 
 func (q *Query) load() error {
@@ -101,60 +113,31 @@ func (q *Query) load() error {
 	request := queryRequest{
 		Filters:    q.filters,
 		Restricted: q.restrictedAttributes,
-		OrderBy:    q.orderBy,
+		OrderBy:    q.orderBy, // todo fix serverside ordering in API or do it on client side
 	}
 
 	resp, err := sendRequest(apiEndpointQuery, request)
 	if err != nil {
-		return err
+		return fmt.Errorf("querying %s: %w", apiEndpointQuery, err)
 	}
 	defer resp.Body.Close()
 
 	respServer := queryResponse{}
-	err = json.NewDecoder(resp.Body).Decode(&respServer)
+	if err = json.NewDecoder(resp.Body).Decode(&respServer); err != nil {
+		return fmt.Errorf("decoding query response: %w", err)
+	}
 
 	// map attribute map into ServerObject objects
 	q.serverObjects = make(ServerObjects, len(respServer.Result))
 	for idx, object := range respServer.Result {
 		q.serverObjects[idx] = &ServerObject{
 			attributes: object,
-			oldValues:  map[string]any{},
+			oldValues:  Attributes{},
 		}
 	}
 	q.loaded = true
 
-	return err
-}
-
-// NewObject creates a new server object (fetches default attributes from SA)
-func NewObject(serverType string) (*ServerObject, error) {
-	server := &ServerObject{
-		oldValues: map[string]any{},
-	}
-
-	// Use url.Values for safe query string encoding
-	params := url.Values{}
-	params.Add("servertype", serverType)
-	fullURL := apiEndpointNewObject + "?" + params.Encode()
-
-	resp, err := sendRequest(fullURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var response struct {
-		Result map[string]any `json:"result"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, err
-	}
-	server.attributes = response.Result
-
-	// Ensure object_id is nil so CommitState() returns "created"
-	server.attributes["object_id"] = nil
-
-	return server, nil
+	return nil
 }
 
 // like {"Filters": {"hostname": {"Regexp": "foo.local.*"}}, "restrict": ["hostname", "object_id"]}
@@ -166,6 +149,6 @@ type queryRequest struct {
 
 // like {"status": "success", "result": [{"object_id": 483903, "hostname": "foo.local"}]}
 type queryResponse struct {
-	Status string           `json:"status"`
-	Result []map[string]any `json:"result"`
+	Status string       `json:"status"`
+	Result []Attributes `json:"result"`
 }

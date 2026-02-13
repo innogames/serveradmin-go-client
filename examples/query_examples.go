@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 
 	api "github.com/innogames/serveradmin-go-client/adminapi"
 )
@@ -14,7 +14,7 @@ func stringQueryExample() {
 	servers, err := q.All()
 	checkErr(err)
 
-	fmt.Printf("Found %d servers using string query\n", len(servers))
+	log.Printf("Found %d servers using string query\n", len(servers))
 }
 
 func simpleFilterExample() {
@@ -22,14 +22,14 @@ func simpleFilterExample() {
 	q := api.NewQuery(api.Filters{
 		"environment": "production",
 		"state":       "online",
-		"num_cpu":     8,
+		"num_cpu":     api.LessThanOrEquals(4),
 	})
 	q.SetAttributes("hostname", "num_cpu", "memory")
 
 	servers, err := q.All()
 	checkErr(err)
 
-	fmt.Printf("Found %d production servers with 8 CPUs\n", len(servers))
+	log.Printf("Found %d production servers with 8 CPUs\n", len(servers))
 }
 
 func regexpFilterExample() {
@@ -42,52 +42,19 @@ func regexpFilterExample() {
 	servers, err := q.All()
 	checkErr(err)
 
-	fmt.Printf("Found %d web servers matching pattern\n", len(servers))
+	log.Printf("Found %d web servers matching pattern\n", len(servers))
 }
 
-func anyAllFilterExample() {
+func anyAnyFilterExample() {
 	// Use Any filter to match multiple possible values
 	q := api.NewQuery(api.Filters{
-		"game_world": api.Any(1, 2, 3),
+		"game_world": api.GreaterThan(1),
 		"state":      api.Any("online", "maintenance"),
 	})
 
 	servers, err := q.All()
 	checkErr(err)
-
-	fmt.Printf("Found %d servers in game worlds 1, 2, or 3\n", len(servers))
-
-	// Use All filter to match all conditions
-	q2 := api.NewQuery(api.Filters{
-		"tags": api.All("backup", "critical"),
-	})
-
-	servers2, err := q2.All()
-	checkErr(err)
-
-	fmt.Printf("Found %d servers with both 'backup' and 'critical' tags\n", len(servers2))
-}
-
-func notFilterExample() {
-	// Use Not with Empty to find servers with non-empty values
-	q := api.NewQuery(api.Filters{
-		"backup_disabled": false,
-		"comment":         api.NotEmpty(),
-	})
-
-	servers, err := q.All()
-	checkErr(err)
-
-	fmt.Printf("Found %d servers with backup_disabled and comment set\n", len(servers))
-
-	// Use Not with specific value
-	q2 := api.NewQuery(api.Filters{})
-	q2.AddFilter("environment", api.Not("development"))
-
-	servers2, err := q2.All()
-	checkErr(err)
-
-	fmt.Printf("Found %d non-development servers\n", len(servers2))
+	log.Printf("Found %d servers:", len(servers))
 }
 
 func nestedFilterExample() {
@@ -107,11 +74,10 @@ func nestedFilterExample() {
 	servers, err := q.All()
 	checkErr(err)
 
-	fmt.Printf("Found %d servers with complex nested filters\n", len(servers))
+	log.Printf("Found %d servers with complex nested filters\n", len(servers))
 }
 
 func combinedFilterExample() {
-	// Real-world example: Find suitable servers for migration
 	q := api.NewQuery(api.Filters{})
 
 	q.AddFilter("servertype", "server")
@@ -142,13 +108,40 @@ func combinedFilterExample() {
 	servers, err := q.All()
 	checkErr(err)
 
-	fmt.Printf("Found %d servers suitable for migration:\n", len(servers))
+	log.Printf("Found %d servers suitable for migration:\n", len(servers))
 	for _, server := range servers {
-		fmt.Printf("  - %s: %v CPUs, %v GB RAM, project: %s\n",
+		log.Printf("  - %s: %v CPUs, %v GB RAM, project: %s\n",
 			server.GetString("hostname"),
 			server.Get("num_cpu"),
 			server.Get("memory"),
 			server.GetString("project"),
 		)
 	}
+}
+
+func multiAttrExample() {
+	// Fetch a server with multi-valued attributes
+	q, err := api.FromQuery("hostname=webserver01")
+	checkErr(err)
+
+	server, err := q.One()
+	checkErr(err)
+
+	// Get tags as MultiAttr
+	tags := server.GetMulti("tags")
+
+	// Use MultiAttr convenience methods
+	tags.Add("monitoring", "web") // Add tags (web is duplicate, won't be added)
+	tags.Delete("old-tag")        // Remove old tag
+
+	if tags.Contains("monitoring") {
+		log.Println("Server has monitoring tag")
+	}
+
+	// Set back to ServerObject and commit
+	checkErr(server.Set("tags", []string(tags)))
+	commitID, err := server.Commit()
+	checkErr(err)
+
+	log.Printf("Updated tags for %s (commit %d)\n", server.GetString("hostname"), commitID)
 }
