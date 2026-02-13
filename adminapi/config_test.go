@@ -2,28 +2,40 @@ package adminapi
 
 import (
 	"net/http/httptest"
-	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoadConfig(t *testing.T) {
-	// clear env to not have configs from host here
-	os.Clearenv()
+// Because getConfig in config.go calls sync.OnceValues, the new values set to
+// SERVERADMIN_BASE_URL between test runs is never changed, as getConfig returns
+// cached values.
+// We use resetConfig() to reinitialize things, forcing getConfig() to return the
+// values from the new env variables.
+func resetConfig() {
+	getConfig = sync.OnceValues(loadConfig)
+}
 
+func TestLoadConfig(t *testing.T) {
 	// make a test without SERVERADMIN_BASE_URL set
+	t.Setenv("SERVERADMIN_BASE_URL", "")
 	_, err := loadConfig()
 	require.Error(t, err, "env var SERVERADMIN_BASE_URL not set")
 
 	// spawn mocked serveradmin server
 	server := httptest.NewServer(nil)
 	defer server.Close()
-	_ = os.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
 
 	t.Run("load static token", func(t *testing.T) {
-		_ = os.Setenv("SERVERADMIN_TOKEN", "jolo")
+		// Unset SSH-related env vars to prevent SSH agent from taking precedence
+		t.Setenv("SSH_AUTH_SOCK", "")
+		t.Setenv("SERVERADMIN_KEY_PATH", "")
+		t.Setenv("SERVERADMIN_TOKEN", "jolo")
+
+		resetConfig()
 		cfg, err := loadConfig()
 
 		require.NoError(t, err)
@@ -32,7 +44,10 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("load valid private key", func(t *testing.T) {
-		_ = os.Setenv("SERVERADMIN_KEY_PATH", "testdata/test.key")
+		t.Setenv("SSH_AUTH_SOCK", "")
+		t.Setenv("SERVERADMIN_KEY_PATH", "testdata/test.key")
+
+		resetConfig()
 		cfg, err := loadConfig()
 
 		require.NoError(t, err)
@@ -41,7 +56,10 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("load invalid private Key", func(t *testing.T) {
-		_ = os.Setenv("SERVERADMIN_KEY_PATH", "testdata/nope.key")
+		t.Setenv("SSH_AUTH_SOCK", "")
+		t.Setenv("SERVERADMIN_KEY_PATH", "testdata/nope.key")
+
+		resetConfig()
 		_, err := loadConfig()
 
 		assert.Error(t, err, "failed to read private key from testdata/nope.key: open testdata/nope.key: no such file or directory")

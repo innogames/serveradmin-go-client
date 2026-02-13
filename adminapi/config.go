@@ -38,9 +38,9 @@ var loadConfig = func() (config, error) {
 	if baseURL == "" {
 		return cfg, errors.New("env var SERVERADMIN_BASE_URL not set")
 	}
-	cfg.baseURL = strings.TrimRight(baseURL, "/api")
+	cfg.baseURL = strings.TrimSuffix(baseURL, "/api")
 
-	if privateKeyPath, ok := os.LookupEnv("SERVERADMIN_KEY_PATH"); ok {
+	if privateKeyPath, ok := os.LookupEnv("SERVERADMIN_KEY_PATH"); ok && privateKeyPath != "" {
 		keyBytes, err := os.ReadFile(privateKeyPath)
 		if err != nil {
 			return cfg, fmt.Errorf("failed to read private key from %s: %w", privateKeyPath, err)

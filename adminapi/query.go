@@ -34,14 +34,22 @@ func NewQuery(filters Filters) Query {
 	}
 }
 
-func (q *Query) SetAttributes(attributes []string) {
+// SetAttributes replaces the list of attributes to fetch from the API
+func (q *Query) SetAttributes(attributes ...string) {
 	q.restrictedAttributes = attributes
 }
 
+// AddAttributes appends additional attributes to the list of attributes to fetch
+func (q *Query) AddAttributes(attributes ...string) {
+	q.restrictedAttributes = append(q.restrictedAttributes, attributes...)
+}
+
+// OrderBy sets the attribute to sort results by
 func (q *Query) OrderBy(attribute string) {
 	q.orderBy = attribute
 }
 
+// AddFilter adds or updates a filter for the specified attribute
 func (q *Query) AddFilter(attribute string, filter any) {
 	q.filters[attribute] = filter
 }
@@ -67,14 +75,14 @@ func (q *Query) All() (ServerObjects, error) {
 }
 
 // One returns exactly one matching SA object. If there is none or more than one, an error is returned.
-func (q *Query) One() (ServerObject, error) {
+func (q *Query) One() (*ServerObject, error) {
 	err := q.load()
 	if err != nil {
-		return ServerObject{}, err
+		return nil, err
 	}
 
 	if len(q.serverObjects) != 1 {
-		return ServerObject{}, fmt.Errorf("expected exactly one server object, got %d", len(q.serverObjects))
+		return nil, fmt.Errorf("expected exactly one server object, got %d", len(q.serverObjects))
 	}
 
 	return q.serverObjects[0], nil
@@ -108,8 +116,9 @@ func (q *Query) load() error {
 	// map attribute map into ServerObject objects
 	q.serverObjects = make(ServerObjects, len(respServer.Result))
 	for idx, object := range respServer.Result {
-		q.serverObjects[idx] = ServerObject{
+		q.serverObjects[idx] = &ServerObject{
 			attributes: object,
+			oldValues:  map[string]any{},
 		}
 	}
 	q.loaded = true
@@ -118,8 +127,10 @@ func (q *Query) load() error {
 }
 
 // NewObject creates a new server object (fetches default attributes from SA)
-func NewObject(serverType string) (ServerObject, error) {
-	server := ServerObject{}
+func NewObject(serverType string) (*ServerObject, error) {
+	server := &ServerObject{
+		oldValues: map[string]any{},
+	}
 
 	// Use url.Values for safe query string encoding
 	params := url.Values{}
@@ -128,13 +139,22 @@ func NewObject(serverType string) (ServerObject, error) {
 
 	resp, err := sendRequest(fullURL, nil)
 	if err != nil {
-		return server, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	err = json.NewDecoder(resp.Body).Decode(&server.attributes)
+	var response struct {
+		Result map[string]any `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+	server.attributes = response.Result
 
-	return server, err
+	// Ensure object_id is nil so CommitState() returns "created"
+	server.attributes["object_id"] = nil
+
+	return server, nil
 }
 
 // like {"Filters": {"hostname": {"Regexp": "foo.local.*"}}, "restrict": ["hostname", "object_id"]}

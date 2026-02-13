@@ -18,8 +18,11 @@ jobs:
       with:
         go-version: stable
 
-    - name: Run tests
-      run: go test ./...
+    - name: Run tests with race detector
+      run: make test-race
+
+    - name: Run test coverage
+      run: make test-coverage
 
   build:
     name: Build
@@ -32,9 +35,6 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: stable
-
-    - name: Install dependencies
-      run: go mod download
 
     - name: Build for multiple platforms
       run: |
@@ -54,8 +54,8 @@ jobs:
         # Build for macOS ARM64 (Apple Silicon)
         GOOS=darwin GOARCH=arm64 go build -o bin/serveradmin-go-darwin-arm64 .
 
-  format-check:
-    name: Format Check
+  linter:
+    name: Linter Check
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -69,12 +69,3 @@ jobs:
       uses: golangci/golangci-lint-action@v8
       with:
         version: latest
-
-    - name: Check go mod tidy
-      run: |
-        go mod tidy
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "go.mod or go.sum is not tidy. Please run 'go mod tidy'"
-          git status
-          exit 1
-        fi

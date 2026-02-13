@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,42 +23,8 @@ import (
 const (
 	apiEndpointQuery     = "/api/dataset/query"
 	apiEndpointNewObject = "/api/dataset/new_object"
+	apiEndpointCommit    = "/api/dataset/commit"
 )
-
-// ServerObjects is a slice of ServerObjects
-type ServerObjects []ServerObject
-
-// ServerObject is a map of key-value attributes of a SA object
-type ServerObject struct {
-	// the actual SA attributes of the object
-	attributes map[string]any
-	// todo: place for dirty changes + .Set()/.Commit() etc here
-}
-
-// Get safely retrieves an attribute, converting JSON float64 numbers to int when needed
-func (s ServerObject) Get(attribute string) any {
-	if val, ok := s.attributes[attribute]; ok {
-		if floatVal, isFloat := val.(float64); isFloat {
-			return int(floatVal)
-		}
-		return val
-	}
-	return nil
-}
-
-// GetString safely retrieves an attribute as a string
-func (s ServerObject) GetString(attribute string) any {
-	val := s.Get(attribute)
-	if strVal, isString := val.(string); isString {
-		return strVal
-	}
-	return nil
-}
-
-// ObjectID returns the "object_id" attribute of the ServerObject
-func (s ServerObject) ObjectID() int {
-	return s.Get("object_id").(int)
-}
 
 func sendRequest(endpoint string, postData any) (*http.Response, error) {
 	config, err := getConfig()
@@ -65,7 +32,10 @@ func sendRequest(endpoint string, postData any) (*http.Response, error) {
 		return nil, fmt.Errorf("failed to get config: %w", err)
 	}
 
-	postStr, _ := json.Marshal(postData)
+	postStr, err := json.Marshal(postData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request data: %w", err)
+	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, config.baseURL+endpoint, bytes.NewBuffer(postStr))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -149,15 +119,9 @@ type gzipReadCloser struct {
 	gz   *gzip.Reader
 }
 
-// Close Read reads from the gzip.Reader.
+// Close closes the gzip.Reader and the underlying body.
 func (grc *gzipReadCloser) Close() error {
-	// Close the gzip.Reader itself
-	if err := grc.gz.Close(); err != nil {
-		grc.body.Close()
-		return err
-	}
-	// Then close the underlying body
-	return grc.body.Close()
+	return errors.Join(grc.gz.Close(), grc.body.Close())
 }
 
 // calcSecurityToken calculates HMAC-SHA1 of timestamp:data
