@@ -73,6 +73,8 @@ func (s *ServerObject) Commit() (int, error) {
 		return 0, err
 	}
 
+	// todo fetch object_id from new object based on hostname
+
 	s.confirmChanges()
 	return commitID, nil
 }
@@ -86,12 +88,14 @@ func buildCommit(objects ServerObjects) commitRequest {
 
 	for _, obj := range objects {
 		switch obj.CommitState() {
-		case "created":
+		case StateCreated:
 			commit.Created = append(commit.Created, obj.attributes)
-		case "changed":
+		case StateChanged:
 			commit.Changed = append(commit.Changed, obj.serializeChanges())
-		case "deleted":
-			commit.Deleted = append(commit.Deleted, obj.Get("object_id"))
+		case StateDeleted:
+			commit.Deleted = append(commit.Deleted, obj.ObjectID())
+		case StateConsistent:
+			// No changes to commit
 		}
 	}
 

@@ -75,17 +75,21 @@ func (q *Query) All() (ServerObjects, error) {
 }
 
 // One returns exactly one matching SA object. If there is none or more than one, an error is returned.
+// Returns ErrNoResults if no objects match, or a wrapped ErrMultipleResults if more than one matches.
 func (q *Query) One() (*ServerObject, error) {
 	err := q.load()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(q.serverObjects) != 1 {
-		return nil, fmt.Errorf("expected exactly one server object, got %d", len(q.serverObjects))
+	switch len(q.serverObjects) {
+	case 1:
+		return q.serverObjects[0], nil
+	case 0:
+		return nil, ErrNoResults
+	default:
+		return nil, fmt.Errorf("got %d: %w", len(q.serverObjects), ErrMultipleResults)
 	}
-
-	return q.serverObjects[0], nil
 }
 
 func (q *Query) load() error {
@@ -101,17 +105,19 @@ func (q *Query) load() error {
 	request := queryRequest{
 		Filters:    q.filters,
 		Restricted: q.restrictedAttributes,
-		OrderBy:    q.orderBy,
+		OrderBy:    q.orderBy, // todo fix serverside ordering in API or do it on client side
 	}
 
 	resp, err := sendRequest(apiEndpointQuery, request)
 	if err != nil {
-		return err
+		return fmt.Errorf("querying %s: %w", apiEndpointQuery, err)
 	}
 	defer resp.Body.Close()
 
 	respServer := queryResponse{}
-	err = json.NewDecoder(resp.Body).Decode(&respServer)
+	if err = json.NewDecoder(resp.Body).Decode(&respServer); err != nil {
+		return fmt.Errorf("decoding query response: %w", err)
+	}
 
 	// map attribute map into ServerObject objects
 	q.serverObjects = make(ServerObjects, len(respServer.Result))
@@ -123,7 +129,7 @@ func (q *Query) load() error {
 	}
 	q.loaded = true
 
-	return err
+	return nil
 }
 
 // NewObject creates a new server object (fetches default attributes from SA)
@@ -151,7 +157,7 @@ func NewObject(serverType string) (*ServerObject, error) {
 	}
 	server.attributes = response.Result
 
-	// Ensure object_id is nil so CommitState() returns "created"
+	// Ensure object_id is nil so commitState() returns "created"
 	server.attributes["object_id"] = nil
 
 	return server, nil

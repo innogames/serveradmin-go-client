@@ -42,7 +42,7 @@ func TestCommitSingle(t *testing.T) {
 	assert.Empty(t, receivedBody.Deleted)
 
 	// State should be reset after commit
-	assert.Equal(t, "consistent", obj.CommitState())
+	assert.Equal(t, StateConsistent, obj.CommitState())
 	assert.Empty(t, obj.oldValues)
 }
 
@@ -126,7 +126,7 @@ func TestServerObjectsSetAllErrors(t *testing.T) {
 	// Should contain errors for both objects
 	assert.Contains(t, err.Error(), "object 0")
 	assert.Contains(t, err.Error(), "object 1")
-	assert.Contains(t, err.Error(), "does not exist")
+	assert.ErrorIs(t, err, ErrUnknownAttribute)
 }
 
 func TestServerObjectsSetPartialErrors(t *testing.T) {
@@ -177,8 +177,8 @@ func TestServerObjectsDelete(t *testing.T) {
 
 	assert.True(t, objects[0].deleted)
 	assert.True(t, objects[1].deleted)
-	assert.Equal(t, "deleted", objects[0].CommitState())
-	assert.Equal(t, "deleted", objects[1].CommitState())
+	assert.Equal(t, StateDeleted, objects[0].CommitState())
+	assert.Equal(t, StateDeleted, objects[1].CommitState())
 }
 
 func TestServerObjectsDeleteEmpty(_ *testing.T) {
@@ -218,6 +218,27 @@ func TestServerObjectsSetWithCommit(t *testing.T) {
 	assert.Equal(t, 999, commitID)
 
 	// State should be consistent after commit
-	assert.Equal(t, "consistent", objects[0].CommitState())
-	assert.Equal(t, "consistent", objects[1].CommitState())
+	assert.Equal(t, StateConsistent, objects[0].CommitState())
+	assert.Equal(t, StateConsistent, objects[1].CommitState())
+}
+
+func TestServerObjectsRollback(t *testing.T) {
+	objects := ServerObjects{
+		{
+			attributes: map[string]any{"hostname": "server1", "object_id": float64(1)},
+			oldValues:  map[string]any{},
+		},
+		{
+			attributes: map[string]any{"hostname": "server2", "object_id": float64(2)},
+			oldValues:  map[string]any{},
+			deleted:    true,
+		},
+	}
+
+	objects[0].Set("hostname", "modified")
+	objects.Rollback()
+
+	assert.Equal(t, "server1", objects[0].GetString("hostname"))
+	assert.Equal(t, StateConsistent, objects[0].CommitState())
+	assert.Equal(t, StateConsistent, objects[1].CommitState())
 }

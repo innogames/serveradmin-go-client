@@ -2,7 +2,6 @@ package adminapi
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -10,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -45,7 +43,6 @@ func sendRequest(endpoint string, postData any) (*http.Response, error) {
 	req.Header.Set("Content-Type", "application/x-json")
 	req.Header.Set("X-Timestamp", strconv.FormatInt(now, 10))
 	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Accept-Encoding", "gzip")
 
 	if config.sshSigner != nil {
 		// sign with private key or SSH agent
@@ -66,16 +63,21 @@ func sendRequest(endpoint string, postData any) (*http.Response, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sending request to %s: %w", endpoint, err)
 	}
 
+	// special error handling
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
 
+		apiErr := &APIError{
+			StatusCode: resp.StatusCode,
+			Status:     http.StatusText(resp.StatusCode),
+		}
+
 		bodyBytes, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			return nil, fmt.Errorf("HTTP error %d %s (failed to read error details: %w)",
-				resp.StatusCode, http.StatusText(resp.StatusCode), readErr)
+			return nil, apiErr
 		}
 
 		var nestedErrorResp struct {
@@ -84,44 +86,13 @@ func sendRequest(endpoint string, postData any) (*http.Response, error) {
 			} `json:"error"`
 		}
 		if jsonErr := json.Unmarshal(bodyBytes, &nestedErrorResp); jsonErr == nil && nestedErrorResp.Error.Message != "" {
-			return nil, fmt.Errorf("HTTP error %d %s: %s",
-				resp.StatusCode, http.StatusText(resp.StatusCode), nestedErrorResp.Error.Message)
+			apiErr.Message = nestedErrorResp.Error.Message
 		}
 
-		// If body is empty, just return the status code
-		return nil, fmt.Errorf("HTTP error %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
-	}
-
-	// If the server responded with gzip encoding, wrap the response body accordingly.
-	if resp.Header.Get("Content-Encoding") == "gzip" {
-		gz, err := gzip.NewReader(resp.Body)
-		if err != nil {
-			resp.Body.Close()
-			return nil, fmt.Errorf("failed to create gzip reader: %w", err)
-		}
-
-		// Replace the resp.Body with our gzip-aware ReadCloser
-		resp.Body = &gzipReadCloser{
-			Reader: gz,
-			body:   resp.Body,
-			gz:     gz,
-		}
+		return nil, apiErr
 	}
 
 	return resp, nil
-}
-
-// gzipReadCloser wraps a gzip.Reader so that
-// closing it also closes the underlying body.
-type gzipReadCloser struct {
-	io.Reader
-	body io.Closer
-	gz   *gzip.Reader
-}
-
-// Close closes the gzip.Reader and the underlying body.
-func (grc *gzipReadCloser) Close() error {
-	return errors.Join(grc.gz.Close(), grc.body.Close())
 }
 
 // calcSecurityToken calculates HMAC-SHA1 of timestamp:data
