@@ -34,18 +34,22 @@ func NewQuery(filters Filters) Query {
 	}
 }
 
+// SetAttributes replaces the list of attributes to fetch from the API
 func (q *Query) SetAttributes(attributes ...string) {
 	q.restrictedAttributes = attributes
 }
 
+// AddAttributes appends additional attributes to the list of attributes to fetch
 func (q *Query) AddAttributes(attributes ...string) {
 	q.restrictedAttributes = append(q.restrictedAttributes, attributes...)
 }
 
+// OrderBy sets the attribute to sort results by
 func (q *Query) OrderBy(attribute string) {
 	q.orderBy = attribute
 }
 
+// AddFilter adds or updates a filter for the specified attribute
 func (q *Query) AddFilter(attribute string, filter any) {
 	q.filters[attribute] = filter
 }
@@ -139,9 +143,13 @@ func NewObject(serverType string) (*ServerObject, error) {
 	}
 	defer resp.Body.Close()
 
-	if err := json.NewDecoder(resp.Body).Decode(&server.attributes); err != nil {
+	var response struct {
+		Result map[string]any `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
+	server.attributes = response.Result
 
 	// Ensure object_id is nil so CommitState() returns "created"
 	server.attributes["object_id"] = nil

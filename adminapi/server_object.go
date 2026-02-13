@@ -3,6 +3,7 @@ package adminapi
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 )
 
 // ServerObjects is a slice of ServerObject pointers
@@ -53,8 +54,8 @@ func (s *ServerObject) Set(key string, value any) error {
 	// Save the original value on first modification only
 	if _, tracked := s.oldValues[key]; !tracked {
 		old := s.attributes[key]
-		// Deep copy slices to prevent aliasing
-		if oldSlice, ok := old.([]any); ok {
+		// Deep copy slices to prevent aliasing (handle any slice type)
+		if oldSlice := toAnySlice(old); oldSlice != nil {
 			cp := make([]any, len(oldSlice))
 			copy(cp, oldSlice)
 			s.oldValues[key] = cp
@@ -108,12 +109,12 @@ func (s *ServerObject) serializeChanges() map[string]any {
 			continue
 		}
 
-		oldSlice, oldIsSlice := oldVal.([]any)
-		_, newIsSlice := newVal.([]any)
+		// Check if both old and new values are slices (of any type)
+		oldSlice := toAnySlice(oldVal)
+		newSlice := toAnySlice(newVal)
 
-		if oldIsSlice && newIsSlice {
+		if oldSlice != nil && newSlice != nil {
 			// Multi-attribute: compute add/remove sets
-			newSlice := toAnySlice(newVal)
 			add, remove := sliceDiff(oldSlice, newSlice)
 			changes[key] = map[string]any{
 				"action": "multi",
@@ -147,16 +148,37 @@ func jsonEqual(a, b any) bool {
 	return string(aj) == string(bj)
 }
 
-// toAnySlice converts a value known to be a slice to []any.
+// toAnySlice converts any slice type ([]string, []int, []any, etc.) to []any.
+// Returns nil if v is not a slice.
 func toAnySlice(v any) []any {
+	if v == nil {
+		return nil
+	}
+
+	// Fast path for []any
 	if s, ok := v.([]any); ok {
 		return s
 	}
-	return nil
+
+	// Use reflection for other slice types
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice {
+		return nil
+	}
+
+	result := make([]any, rv.Len())
+	for i := range rv.Len() {
+		result[i] = rv.Index(i).Interface()
+	}
+	return result
 }
 
 // sliceDiff computes elements added to and removed from old to produce new (set semantics).
 func sliceDiff(old, cur []any) (add, remove []any) {
+	// Initialize as empty slices instead of nil so JSON serializes to [] not null
+	add = []any{}
+	remove = []any{}
+
 	oldSet := make(map[string]any, len(old))
 	for _, v := range old {
 		k, _ := json.Marshal(v)

@@ -68,7 +68,6 @@ func (s ServerObjects) Delete() {
 // Commit commits this single object's changes to the server.
 func (s *ServerObject) Commit() (int, error) {
 	commit := buildCommit(ServerObjects{s})
-
 	commitID, err := sendCommit(commit)
 	if err != nil {
 		return 0, err

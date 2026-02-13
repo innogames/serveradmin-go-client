@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	api "github.com/innogames/serveradmin-go-client/adminapi"
 )
@@ -10,14 +9,10 @@ import (
 func stringQueryExample() {
 	// Simple string-based query
 	q, err := api.FromQuery("hostname=webserver01 environment=production")
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	servers, err := q.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d servers using string query\n", len(servers))
 }
@@ -32,9 +27,7 @@ func simpleFilterExample() {
 	q.SetAttributes("hostname", "num_cpu", "memory")
 
 	servers, err := q.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d production servers with 8 CPUs\n", len(servers))
 }
@@ -47,9 +40,7 @@ func regexpFilterExample() {
 	})
 
 	servers, err := q.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d web servers matching pattern\n", len(servers))
 }
@@ -62,9 +53,7 @@ func anyAllFilterExample() {
 	})
 
 	servers, err := q.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d servers in game worlds 1, 2, or 3\n", len(servers))
 
@@ -74,9 +63,7 @@ func anyAllFilterExample() {
 	})
 
 	servers2, err := q2.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d servers with both 'backup' and 'critical' tags\n", len(servers2))
 }
@@ -89,9 +76,7 @@ func notFilterExample() {
 	})
 
 	servers, err := q.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d servers with backup_disabled and comment set\n", len(servers))
 
@@ -100,9 +85,7 @@ func notFilterExample() {
 	q2.AddFilter("environment", api.Not("development"))
 
 	servers2, err := q2.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d non-development servers\n", len(servers2))
 }
@@ -122,9 +105,7 @@ func nestedFilterExample() {
 	q.AddFilter("environment", api.Any("production", "staging"))
 
 	servers, err := q.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d servers with complex nested filters\n", len(servers))
 }
@@ -159,9 +140,7 @@ func combinedFilterExample() {
 	)
 
 	servers, err := q.All()
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkErr(err)
 
 	fmt.Printf("Found %d servers suitable for migration:\n", len(servers))
 	for _, server := range servers {

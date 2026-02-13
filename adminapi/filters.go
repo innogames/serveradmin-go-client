@@ -1,7 +1,5 @@
 package adminapi
 
-// todo have proper values and more fitting types instead of any
-
 type (
 	Filters map[string]any
 	Filter  map[string]any
@@ -54,6 +52,42 @@ func All[V valueOrFilter](values ...V) Filter {
 
 func Empty() Filter {
 	return createFilter("Empty", nil)
+}
+
+func StartsWith(value string) Filter {
+	return createFilter("StartsWith", value)
+}
+
+func GreaterThan[N int | float64](value N) Filter {
+	return createFilter("GreaterThan", value)
+}
+
+func GreaterThanOrEquals[N int | float64](value N) Filter {
+	return createFilter("GreaterThanOrEquals", value)
+}
+
+func LessThan[N int | float64](value N) Filter {
+	return createFilter("LessThan", value)
+}
+
+func LessThanOrEquals[N int | float64](value N) Filter {
+	return createFilter("LessThanOrEquals", value)
+}
+
+func Contains[V valueOrFilter](value V) Filter {
+	return createFilter("Contains", value)
+}
+
+func ContainedBy[V valueOrFilter](value V) Filter {
+	return createFilter("ContainedBy", value)
+}
+
+func ContainedOnlyBy[V valueOrFilter](value V) Filter {
+	return createFilter("ContainedOnlyBy", value)
+}
+
+func Overlaps[V valueOrFilter](value V) Filter {
+	return createFilter("Overlaps", value)
 }
 
 func createFilter(filterType string, value any) Filter {

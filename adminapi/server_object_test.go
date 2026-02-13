@@ -110,3 +110,111 @@ func TestRollback(t *testing.T) {
 	assert.Empty(t, obj.oldValues)
 	assert.Equal(t, "consistent", obj.CommitState())
 }
+
+func TestSetMultiAttribute_WithStringSlice(t *testing.T) {
+	// Simulate a fetched object with a multi-attribute
+	// (JSON decoding produces []any for arrays)
+	attributes := map[string]any{
+		"object_id": float64(12345),
+		"hostname":  "test.example.com",
+		"dns_txt":   []any{"existing", "values"},
+	}
+
+	obj := &ServerObject{
+		attributes: attributes,
+		oldValues:  map[string]any{},
+	}
+
+	// User sets the attribute using []string (common usage)
+	err := obj.Set("dns_txt", []string{"new", "values"})
+	require.NoError(t, err)
+
+	// Verify oldValues captured the original
+	assert.Equal(t, []any{"existing", "values"}, obj.oldValues["dns_txt"])
+
+	// Serialize changes
+	changes := obj.serializeChanges()
+
+	// Should use "multi" action, not "update"
+	dnsChange, ok := changes["dns_txt"].(map[string]any)
+	require.True(t, ok, "dns_txt change should be a map")
+
+	assert.Equal(t, "multi", dnsChange["action"],
+		"Multi-attribute should use 'multi' action even with []string, not 'update'")
+
+	// Verify correct add/remove sets
+	add := dnsChange["add"].([]any)
+	remove := dnsChange["remove"].([]any)
+
+	assert.ElementsMatch(t, []any{"new"}, add)
+	assert.ElementsMatch(t, []any{"existing"}, remove)
+}
+
+func TestSetMultiAttribute_WithIntSlice(t *testing.T) {
+	attributes := map[string]any{
+		"object_id": float64(12345),
+		"ports":     []any{80, 443},
+	}
+
+	obj := &ServerObject{
+		attributes: attributes,
+		oldValues:  map[string]any{},
+	}
+
+	// User passes []int
+	err := obj.Set("ports", []int{443, 8080})
+	require.NoError(t, err)
+
+	changes := obj.serializeChanges()
+	portsChange := changes["ports"].(map[string]any)
+
+	assert.Equal(t, "multi", portsChange["action"])
+	assert.ElementsMatch(t, []any{8080}, portsChange["add"])
+	assert.ElementsMatch(t, []any{80}, portsChange["remove"])
+}
+
+func TestToAnySlice_VariousTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected []any
+	}{
+		{
+			name:     "already []any",
+			input:    []any{1, 2, 3},
+			expected: []any{1, 2, 3},
+		},
+		{
+			name:     "[]string",
+			input:    []string{"a", "b", "c"},
+			expected: []any{"a", "b", "c"},
+		},
+		{
+			name:     "[]int",
+			input:    []int{1, 2, 3},
+			expected: []any{1, 2, 3},
+		},
+		{
+			name:     "[]interface{} with mixed types",
+			input:    []interface{}{"str", 42, true},
+			expected: []any{"str", 42, true},
+		},
+		{
+			name:     "not a slice",
+			input:    "string",
+			expected: nil,
+		},
+		{
+			name:     "nil",
+			input:    nil,
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := toAnySlice(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
