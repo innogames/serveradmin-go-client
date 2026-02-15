@@ -37,6 +37,10 @@ func TestFakeServer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, servers, 1)
 
+	count, err := query.Count()
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
 	object := servers[0]
 	assert.Equal(t, "foo.bar.local", object.Get("hostname"))
 	assert.Equal(t, "foo.bar.local", object.GetString("hostname"))

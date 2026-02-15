@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	api "github.com/innogames/serveradmin-go-client/adminapi"
 )
@@ -10,13 +9,18 @@ import (
 func singleObjectExample() {
 	q, err := api.FromQuery("hostname=webserver01")
 	checkErr(err)
-	q.AddAttributes("backup_disabled")
+	q.AddAttributes("backup_disabled", "tags")
 
 	server, err := q.One()
 	checkErr(err)
 
 	// Modify attributes
 	server.Set("backup_disabled", true)
+
+	// Get and update  multi-valued attribute as MultiAttr
+	tags := server.GetMulti("tags")
+	tags.Add("monitoring", "web")
+	tags.Delete("old-tag")
 
 	// Commit changes
 	commitID, err := server.Commit()
@@ -78,13 +82,13 @@ func deleteObjectExample() {
 }
 
 func batchDeleteExample() {
-	q, err := api.FromQuery("state=decommissioned")
+	q, err := api.FromQuery("servertype=domain state=retired")
 	checkErr(err)
 
 	servers, err := q.All()
 	checkErr(err)
 
-	// Delete ALL decommissioned servers using batch Delete()
+	// Delete ALL retired domains using batch Delete()
 	servers.Delete()
 
 	// Commit all deletions in a single API call
@@ -102,18 +106,10 @@ func rollbackExample() {
 	checkErr(err)
 
 	// Make some changes
-	originalHostname := server.GetString("hostname")
 	server.Set("hostname", "modified-name.local")
 	fmt.Printf("Modified hostname: %s\n", server.GetString("hostname"))
 
 	// Rollback the changes
 	server.Rollback()
 	fmt.Printf("After rollback: %s\n", server.GetString("hostname"))
-
-	// Check commit state
-	fmt.Printf("Commit state: %s\n", server.CommitState()) // Should be "consistent"
-
-	if server.GetString("hostname") != originalHostname {
-		log.Fatal("Rollback failed!")
-	}
 }
