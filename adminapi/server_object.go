@@ -11,8 +11,8 @@ type ServerObjects []*ServerObject
 
 // ServerObject is a map of key-value attributes of a SA object
 type ServerObject struct {
-	attributes map[string]any
-	oldValues  map[string]any // tracks original values before first modification
+	attributes Attributes
+	oldValues  Attributes // tracks original values before first modification
 	deleted    bool
 }
 
@@ -36,6 +36,32 @@ func (s *ServerObject) GetString(attribute string) string {
 	return ""
 }
 
+// GetMulti safely retrieves a multi-valued attribute as a MultiAttr.
+// Returns an empty MultiAttr if the attribute is missing, nil, or not a slice of strings.
+func (s *ServerObject) GetMulti(attribute string) MultiAttr {
+	val, ok := s.attributes[attribute]
+	if !ok || val == nil {
+		return MultiAttr{}
+	}
+
+	switch v := val.(type) {
+	case MultiAttr:
+		return v
+	case []string:
+		return v
+	case []any:
+		result := make(MultiAttr, 0, len(v))
+		for _, elem := range v {
+			if str, ok := elem.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result
+	default:
+		return MultiAttr{}
+	}
+}
+
 // ObjectID returns the "object_id" attribute of the ServerObject
 func (s *ServerObject) ObjectID() int {
 	val := s.Get("object_id")
@@ -45,10 +71,24 @@ func (s *ServerObject) ObjectID() int {
 	return 0
 }
 
+// CommitState represents the state of a ServerObject with respect to pending changes.
+type CommitState string
+
+const (
+	// StateCreated indicates the object is new and has not been committed yet.
+	StateCreated CommitState = "created"
+	// StateDeleted indicates the object has been marked for deletion.
+	StateDeleted CommitState = "deleted"
+	// StateChanged indicates the object has local modifications pending commit.
+	StateChanged CommitState = "changed"
+	// StateConsistent indicates the object has no pending changes.
+	StateConsistent CommitState = "consistent"
+)
+
 // Set modifies an attribute value and tracks the change for commit.
 func (s *ServerObject) Set(key string, value any) error {
 	if _, exists := s.attributes[key]; !exists {
-		return fmt.Errorf("attribute %q does not exist", key)
+		return fmt.Errorf("attribute %q: %w", key, ErrUnknownAttribute)
 	}
 
 	// Save the original value on first modification only
@@ -73,35 +113,35 @@ func (s *ServerObject) Delete() {
 	s.deleted = true
 }
 
-// CommitState returns the current state: "created", "deleted", "changed", or "consistent".
-func (s *ServerObject) CommitState() string {
-	if s.attributes["object_id"] == nil {
-		return "created"
-	}
-	if s.deleted {
-		return "deleted"
-	}
-	for key, oldVal := range s.oldValues {
-		newVal := s.attributes[key]
-		if !jsonEqual(oldVal, newVal) {
-			return "changed"
-		}
-	}
-	return "consistent"
-}
-
 // Rollback reverts all local changes, restoring original attribute values.
 func (s *ServerObject) Rollback() {
 	s.deleted = false
 	for key, oldVal := range s.oldValues {
 		s.attributes[key] = oldVal
 	}
-	s.oldValues = map[string]any{}
+	s.oldValues = Attributes{}
+}
+
+// CommitState returns the current state of the object with respect to pending changes.
+func (s *ServerObject) CommitState() CommitState {
+	if s.attributes["object_id"] == nil {
+		return StateCreated
+	}
+	if s.deleted {
+		return StateDeleted
+	}
+	for key, oldVal := range s.oldValues {
+		newVal := s.attributes[key]
+		if !jsonEqual(oldVal, newVal) {
+			return StateChanged
+		}
+	}
+	return StateConsistent
 }
 
 // serializeChanges builds the change delta for commit payload.
-func (s *ServerObject) serializeChanges() map[string]any {
-	changes := map[string]any{"object_id": s.Get("object_id")}
+func (s *ServerObject) serializeChanges() Attributes {
+	changes := Attributes{"object_id": s.ObjectID()}
 
 	for key, oldVal := range s.oldValues {
 		newVal := s.attributes[key]
@@ -134,7 +174,7 @@ func (s *ServerObject) serializeChanges() map[string]any {
 }
 
 func (s *ServerObject) confirmChanges() {
-	s.oldValues = map[string]any{}
+	s.oldValues = Attributes{}
 	if s.deleted {
 		s.attributes["object_id"] = nil
 		s.deleted = false

@@ -9,8 +9,8 @@ import (
 
 func TestSet(t *testing.T) {
 	obj := &ServerObject{
-		attributes: map[string]any{"hostname": "old.local", "object_id": float64(1)},
-		oldValues:  map[string]any{},
+		attributes: Attributes{"hostname": "old.local", "object_id": float64(1)},
+		oldValues:  Attributes{},
 	}
 
 	err := obj.Set("hostname", "new.local")
@@ -26,47 +26,47 @@ func TestSet(t *testing.T) {
 
 func TestSetNonexistent(t *testing.T) {
 	obj := &ServerObject{
-		attributes: map[string]any{"hostname": "test", "object_id": float64(1)},
-		oldValues:  map[string]any{},
+		attributes: Attributes{"hostname": "test", "object_id": float64(1)},
+		oldValues:  Attributes{},
 	}
 
 	err := obj.Set("nonexistent", "value")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does not exist")
+	assert.ErrorIs(t, err, ErrUnknownAttribute)
 }
 
 func TestCommitState(t *testing.T) {
 	// Consistent: no changes
 	obj := &ServerObject{
-		attributes: map[string]any{"hostname": "test", "object_id": float64(1)},
-		oldValues:  map[string]any{},
+		attributes: Attributes{"hostname": "test", "object_id": float64(1)},
+		oldValues:  Attributes{},
 	}
-	assert.Equal(t, "consistent", obj.CommitState())
+	assert.Equal(t, StateConsistent, obj.CommitState())
 
 	// Changed: attribute modified
 	obj.Set("hostname", "changed")
-	assert.Equal(t, "changed", obj.CommitState())
+	assert.Equal(t, StateChanged, obj.CommitState())
 
 	// Deleted
 	obj2 := &ServerObject{
-		attributes: map[string]any{"hostname": "test", "object_id": float64(1)},
-		oldValues:  map[string]any{},
+		attributes: Attributes{"hostname": "test", "object_id": float64(1)},
+		oldValues:  Attributes{},
 		deleted:    true,
 	}
-	assert.Equal(t, "deleted", obj2.CommitState())
+	assert.Equal(t, StateDeleted, obj2.CommitState())
 
 	// Created: no object_id
 	obj3 := &ServerObject{
-		attributes: map[string]any{"hostname": "test", "object_id": nil},
-		oldValues:  map[string]any{},
+		attributes: Attributes{"hostname": "test", "object_id": nil},
+		oldValues:  Attributes{},
 	}
-	assert.Equal(t, "created", obj3.CommitState())
+	assert.Equal(t, StateCreated, obj3.CommitState())
 }
 
 func TestSerializeChanges(t *testing.T) {
 	obj := &ServerObject{
-		attributes: map[string]any{"hostname": "new.local", "object_id": float64(42)},
-		oldValues:  map[string]any{"hostname": "old.local"},
+		attributes: Attributes{"hostname": "new.local", "object_id": float64(42)},
+		oldValues:  Attributes{"hostname": "old.local"},
 	}
 
 	changes := obj.serializeChanges()
@@ -80,11 +80,11 @@ func TestSerializeChanges(t *testing.T) {
 
 func TestSerializeChangesMulti(t *testing.T) {
 	obj := &ServerObject{
-		attributes: map[string]any{
+		attributes: Attributes{
 			"tags":      []any{"web", "new-tag"},
 			"object_id": float64(42),
 		},
-		oldValues: map[string]any{
+		oldValues: Attributes{
 			"tags": []any{"web", "old-tag"},
 		},
 	}
@@ -98,8 +98,8 @@ func TestSerializeChangesMulti(t *testing.T) {
 
 func TestRollback(t *testing.T) {
 	obj := &ServerObject{
-		attributes: map[string]any{"hostname": "original", "object_id": float64(1)},
-		oldValues:  map[string]any{},
+		attributes: Attributes{"hostname": "original", "object_id": float64(1)},
+		oldValues:  Attributes{},
 	}
 
 	obj.Set("hostname", "modified")
@@ -108,7 +108,231 @@ func TestRollback(t *testing.T) {
 	obj.Rollback()
 	assert.Equal(t, "original", obj.GetString("hostname"))
 	assert.Empty(t, obj.oldValues)
-	assert.Equal(t, "consistent", obj.CommitState())
+	assert.Equal(t, StateConsistent, obj.CommitState())
+}
+
+func TestRollback_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name            string
+		initialAttrs    Attributes
+		initialOldVals  Attributes
+		initialDeleted  bool
+		modifications   func(*ServerObject)
+		expectedAttrs   Attributes
+		expectedDeleted bool
+		expectedState   CommitState
+	}{
+		{
+			name: "rollback single attribute change",
+			initialAttrs: Attributes{
+				"hostname":  "original.local",
+				"object_id": float64(1),
+			},
+			initialOldVals: Attributes{},
+			modifications: func(obj *ServerObject) {
+				obj.Set("hostname", "modified.local")
+			},
+			expectedAttrs: Attributes{
+				"hostname":  "original.local",
+				"object_id": float64(1),
+			},
+			expectedDeleted: false,
+			expectedState:   StateConsistent,
+		},
+		{
+			name: "rollback multiple attribute changes",
+			initialAttrs: Attributes{
+				"hostname":    "original.local",
+				"environment": "development",
+				"object_id":   float64(2),
+			},
+			initialOldVals: Attributes{},
+			modifications: func(obj *ServerObject) {
+				obj.Set("hostname", "new.local")
+				obj.Set("environment", "production")
+			},
+			expectedAttrs: Attributes{
+				"hostname":    "original.local",
+				"environment": "development",
+				"object_id":   float64(2),
+			},
+			expectedDeleted: false,
+			expectedState:   StateConsistent,
+		},
+		{
+			name: "rollback multi-attribute (slice) changes",
+			initialAttrs: Attributes{
+				"tags":      []any{"web", "original"},
+				"object_id": float64(3),
+			},
+			initialOldVals: Attributes{},
+			modifications: func(obj *ServerObject) {
+				obj.Set("tags", []string{"web", "modified", "new"})
+			},
+			expectedAttrs: Attributes{
+				"tags":      []any{"web", "original"},
+				"object_id": float64(3),
+			},
+			expectedDeleted: false,
+			expectedState:   StateConsistent,
+		},
+		{
+			name: "rollback deleted object",
+			initialAttrs: Attributes{
+				"hostname":  "test.local",
+				"object_id": float64(4),
+			},
+			initialOldVals: Attributes{},
+			modifications: func(obj *ServerObject) {
+				obj.Delete()
+			},
+			expectedAttrs: Attributes{
+				"hostname":  "test.local",
+				"object_id": float64(4),
+			},
+			expectedDeleted: false,
+			expectedState:   StateConsistent,
+		},
+		{
+			name: "rollback deleted object with attribute changes",
+			initialAttrs: Attributes{
+				"hostname":  "original.local",
+				"object_id": float64(5),
+			},
+			initialOldVals: Attributes{},
+			modifications: func(obj *ServerObject) {
+				obj.Set("hostname", "modified.local")
+				obj.Delete()
+			},
+			expectedAttrs: Attributes{
+				"hostname":  "original.local",
+				"object_id": float64(5),
+			},
+			expectedDeleted: false,
+			expectedState:   StateConsistent,
+		},
+		{
+			name: "rollback with no changes",
+			initialAttrs: Attributes{
+				"hostname":  "unchanged.local",
+				"object_id": float64(6),
+			},
+			initialOldVals: Attributes{},
+			modifications:  func(_ *ServerObject) {},
+			expectedAttrs: Attributes{
+				"hostname":  "unchanged.local",
+				"object_id": float64(6),
+			},
+			expectedDeleted: false,
+			expectedState:   StateConsistent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := &ServerObject{
+				attributes: tt.initialAttrs,
+				oldValues:  tt.initialOldVals,
+				deleted:    tt.initialDeleted,
+			}
+
+			// Apply modifications
+			tt.modifications(obj)
+
+			// Rollback
+			obj.Rollback()
+
+			// Verify attributes are restored
+			assert.Equal(t, tt.expectedAttrs, obj.attributes,
+				"attributes should be restored to original values")
+
+			// Verify oldValues is cleared
+			assert.Empty(t, obj.oldValues, "oldValues should be empty after rollback")
+
+			// Verify deleted flag is reset
+			assert.Equal(t, tt.expectedDeleted, obj.deleted,
+				"deleted flag should be reset")
+
+			// Verify commit state
+			assert.Equal(t, tt.expectedState, obj.CommitState(),
+				"commit state should be consistent after rollback")
+		})
+	}
+}
+
+func TestGetMulti(t *testing.T) {
+	tests := []struct {
+		name     string
+		attrs    Attributes
+		key      string
+		expected MultiAttr
+	}{
+		{
+			name:     "[]any with strings",
+			attrs:    Attributes{"tags": []any{"web", "prod"}},
+			key:      "tags",
+			expected: MultiAttr{"web", "prod"},
+		},
+		{
+			name:     "[]string",
+			attrs:    Attributes{"tags": []string{"web", "prod"}},
+			key:      "tags",
+			expected: MultiAttr{"web", "prod"},
+		},
+		{
+			name:     "MultiAttr directly",
+			attrs:    Attributes{"tags": MultiAttr{"web"}},
+			key:      "tags",
+			expected: MultiAttr{"web"},
+		},
+		{
+			name:     "missing attribute",
+			attrs:    Attributes{"hostname": "test"},
+			key:      "tags",
+			expected: MultiAttr{},
+		},
+		{
+			name:     "nil value",
+			attrs:    Attributes{"tags": nil},
+			key:      "tags",
+			expected: MultiAttr{},
+		},
+		{
+			name:     "non-slice value (string)",
+			attrs:    Attributes{"tags": "not-a-slice"},
+			key:      "tags",
+			expected: MultiAttr{},
+		},
+		{
+			name:     "non-slice value (int)",
+			attrs:    Attributes{"tags": 42},
+			key:      "tags",
+			expected: MultiAttr{},
+		},
+		{
+			name:     "[]any with mixed types keeps only strings",
+			attrs:    Attributes{"tags": []any{"web", 42, true, "prod"}},
+			key:      "tags",
+			expected: MultiAttr{"web", "prod"},
+		},
+		{
+			name:     "empty []any",
+			attrs:    Attributes{"tags": []any{}},
+			key:      "tags",
+			expected: MultiAttr{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := &ServerObject{
+				attributes: tt.attrs,
+				oldValues:  Attributes{},
+			}
+			result := obj.GetMulti(tt.key)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestSetMultiAttribute_WithStringSlice(t *testing.T) {
@@ -122,7 +346,7 @@ func TestSetMultiAttribute_WithStringSlice(t *testing.T) {
 
 	obj := &ServerObject{
 		attributes: attributes,
-		oldValues:  map[string]any{},
+		oldValues:  Attributes{},
 	}
 
 	// User sets the attribute using []string (common usage)
@@ -158,7 +382,7 @@ func TestSetMultiAttribute_WithIntSlice(t *testing.T) {
 
 	obj := &ServerObject{
 		attributes: attributes,
-		oldValues:  map[string]any{},
+		oldValues:  Attributes{},
 	}
 
 	// User passes []int
