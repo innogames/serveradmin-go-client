@@ -142,6 +142,17 @@ server.Set("maintenance_mode", "true")
 server.Commit()
 ```
 
+### Calling API Functions
+
+```go
+// Call a remote API function by group and function name
+result, err := adminapi.CallAPI("ip", "get_free", map[string]any{"network": "internal"})
+if err != nil {
+    panic(err)
+}
+fmt.Printf("Free IP: %s\n", result)
+```
+
 ## Building
 
 ```bash
