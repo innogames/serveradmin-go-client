@@ -94,6 +94,14 @@ func batchDeleteExample() {
 	fmt.Printf("Deleted %d servers (commit %d)\n", len(servers), commitID)
 }
 
+func callAPIExample() {
+	// Call a remote API function
+	result, err := api.CallAPI("ip", "get_free", map[string]any{"network": "internal"})
+	checkErr(err)
+
+	fmt.Printf("Free IP: %s\n", result)
+}
+
 func rollbackExample() {
 	q, err := api.FromQuery("hostname=webserver01")
 	checkErr(err)
