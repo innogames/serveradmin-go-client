@@ -1,17 +1,42 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
 	api "github.com/innogames/serveradmin-go-client/adminapi"
 )
+
+// clientExample shows the recommended entry point: an explicit, per-instance
+// Client constructed from a Config. No environment variables are read, and the
+// client is safe for concurrent use, so a single process can hold several
+// clients pointing at different targets.
+func clientExample() {
+	client, err := api.NewClient(api.Config{
+		BaseURL: "https://serveradmin.example.com",
+		Token:   "your-token",
+		Timeout: 10 * time.Second,
+	})
+	checkErr(err)
+
+	ctx := context.Background()
+
+	q, err := client.FromQuery("hostname=webserver01 environment=production")
+	checkErr(err)
+
+	servers, err := q.All(ctx)
+	checkErr(err)
+
+	log.Printf("Found %d servers using the client API\n", len(servers))
+}
 
 func stringQueryExample() {
 	// Simple string-based query
 	q, err := api.FromQuery("hostname=webserver01 environment=production")
 	checkErr(err)
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	checkErr(err)
 
 	log.Printf("Found %d servers using string query\n", len(servers))
@@ -26,7 +51,7 @@ func simpleFilterExample() {
 	})
 	q.SetAttributes("hostname", "num_cpu", "memory")
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	checkErr(err)
 
 	log.Printf("Found %d production servers with 8 CPUs\n", len(servers))
@@ -39,7 +64,7 @@ func regexpFilterExample() {
 		"environment": "production",
 	})
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	checkErr(err)
 
 	log.Printf("Found %d web servers matching pattern\n", len(servers))
@@ -52,7 +77,7 @@ func anyAnyFilterExample() {
 		"state":      api.Any("online", "maintenance"),
 	})
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	checkErr(err)
 	log.Printf("Found %d servers:", len(servers))
 }
@@ -71,7 +96,7 @@ func nestedFilterExample() {
 	// Environment must be production or staging, but not empty
 	q.AddFilter("environment", api.Any("production", "staging"))
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	checkErr(err)
 
 	log.Printf("Found %d servers with complex nested filters\n", len(servers))
@@ -105,7 +130,7 @@ func combinedFilterExample() {
 		"object_id",
 	)
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	checkErr(err)
 
 	log.Printf("Found %d servers suitable for migration:\n", len(servers))
@@ -124,7 +149,7 @@ func multiAttrExample() {
 	q, err := api.FromQuery("hostname=webserver01")
 	checkErr(err)
 
-	server, err := q.One()
+	server, err := q.One(context.Background())
 	checkErr(err)
 
 	// Get tags as MultiAttr
@@ -140,7 +165,7 @@ func multiAttrExample() {
 
 	// Set back to ServerObject and commit
 	checkErr(server.Set("tags", []string(tags)))
-	commitID, err := server.Commit()
+	commitID, err := server.Commit(context.Background())
 	checkErr(err)
 
 	log.Printf("Updated tags for %s (commit %d)\n", server.GetString("hostname"), commitID)

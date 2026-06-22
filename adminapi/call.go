@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -22,7 +23,20 @@ type callResponse struct {
 
 // CallAPI calls a remote API function on the Serveradmin server.
 // It takes a function group, function name, and keyword arguments as a map.
+//
+// Deprecated: use Client.CallAPI so the request uses an explicit, per-instance
+// configuration instead of a process-global one built from environment variables.
 func CallAPI(group, function string, args map[string]any) (any, error) {
+	client, err := defaultClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.CallAPI(context.Background(), group, function, args)
+}
+
+// CallAPI calls a remote API function on the Serveradmin server using this client.
+// It takes a function group, function name, and keyword arguments as a map.
+func (c *Client) CallAPI(ctx context.Context, group, function string, args map[string]any) (any, error) {
 	req := callRequest{
 		Group:  group,
 		Name:   function,
@@ -30,7 +44,7 @@ func CallAPI(group, function string, args map[string]any) (any, error) {
 		Kwargs: args,
 	}
 
-	resp, err := sendRequest(apiEndpointCall, req)
+	resp, err := c.sendRequest(ctx, apiEndpointCall, req)
 	if err != nil {
 		return nil, err
 	}

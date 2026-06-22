@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	api "github.com/innogames/serveradmin-go-client/adminapi"
@@ -14,6 +15,7 @@ func checkErr(err error) {
 }
 
 func main() {
+	ctx := context.Background()
 	var commitID int
 
 	// Step 1: Check if object already exists
@@ -22,7 +24,7 @@ func main() {
 	checkErr(err)
 	q.AddAttributes("dns_txt")
 
-	publicURL, err := q.One()
+	publicURL, err := q.One(ctx)
 	if err != nil {
 		// Object doesn't exist, create it
 		log.Println("=== Object not found, creating new public_domain object ===")
@@ -45,7 +47,7 @@ func main() {
 	publicURL.Set("dns_txt", dnsTxt)
 
 	// Commit the update
-	commitID, err = publicURL.Commit()
+	commitID, err = publicURL.Commit(ctx)
 	checkErr(err)
 	log.Printf("Set dns_txt to %v (commit ID: %d)\n", publicURL.Get("dns_txt"), commitID)
 
@@ -56,14 +58,14 @@ func main() {
 	publicURL.Set("dns_txt", dnsTxt)
 
 	// Commit the second update
-	commitID, err = publicURL.Commit()
+	commitID, err = publicURL.Commit(ctx)
 	checkErr(err)
 	log.Printf("Added to dns_txt, now: %v (commit ID: %d)\n", publicURL.Get("dns_txt"), commitID)
 
 	// Step 4: Delete the object
 	log.Println("\n=== Deleting object ===")
 	publicURL.Delete()
-	commitID, err = publicURL.Commit()
+	commitID, err = publicURL.Commit(ctx)
 	checkErr(err)
 	log.Printf("Deleted public_url (commit ID: %d)\n", commitID)
 

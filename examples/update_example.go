@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	api "github.com/innogames/serveradmin-go-client/adminapi"
@@ -11,7 +12,7 @@ func singleObjectExample() {
 	checkErr(err)
 	q.AddAttributes("backup_disabled", "tags")
 
-	server, err := q.One()
+	server, err := q.One(context.Background())
 	checkErr(err)
 
 	// Modify attributes
@@ -23,7 +24,7 @@ func singleObjectExample() {
 	tags.Delete("old-tag")
 
 	// Commit changes
-	commitID, err := server.Commit()
+	commitID, err := server.Commit(context.Background())
 	checkErr(err)
 
 	fmt.Printf("Updated server %s (commit %d)\n", server.GetString("hostname"), commitID)
@@ -34,14 +35,14 @@ func multiObjectExample() {
 	checkErr(err)
 	q.SetAttributes("hostname", "backup_disabled")
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	checkErr(err)
 
 	// Update all servers using batch Set()
 	servers.Set("backup_disabled", false)
 
 	// Commit all changes in a single API call
-	commitID, err := servers.Commit()
+	commitID, err := servers.Commit(context.Background())
 	checkErr(err)
 
 	fmt.Printf("Updated %d servers (commit %d)\n", len(servers), commitID)
@@ -64,14 +65,14 @@ func deleteObjectExample() {
 	q, err := api.FromQuery("hostname=oldserver.example.com")
 	checkErr(err)
 
-	server, err := q.One()
+	server, err := q.One(context.Background())
 	checkErr(err)
 
 	// Mark for deletion
 	server.Delete()
 
 	// Commit the deletion
-	commitID, err := server.Commit()
+	commitID, err := server.Commit(context.Background())
 	checkErr(err)
 
 	fmt.Printf("Deleted server (commit %d)\n", commitID)
@@ -81,14 +82,14 @@ func batchDeleteExample() {
 	q, err := api.FromQuery("servertype=domain state=retired")
 	checkErr(err)
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	checkErr(err)
 
 	// Delete ALL retired domains using batch Delete()
 	servers.Delete()
 
 	// Commit all deletions in a single API call
-	commitID, err := servers.Commit()
+	commitID, err := servers.Commit(context.Background())
 	checkErr(err)
 
 	fmt.Printf("Deleted %d servers (commit %d)\n", len(servers), commitID)
@@ -106,7 +107,7 @@ func rollbackExample() {
 	q, err := api.FromQuery("hostname=webserver01")
 	checkErr(err)
 
-	server, err := q.One()
+	server, err := q.One(context.Background())
 	checkErr(err)
 
 	// Make some changes

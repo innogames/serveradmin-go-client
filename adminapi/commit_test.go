@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -32,7 +33,7 @@ func TestCommitSingle(t *testing.T) {
 		oldValues:  Attributes{"hostname": "old.local"},
 	}
 
-	commitID, err := obj.Commit()
+	commitID, err := obj.Commit(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 123, commitID)
 
@@ -78,7 +79,7 @@ func TestCommitResultSet(t *testing.T) {
 		},
 	}
 
-	commitID, err := objects.Commit()
+	commitID, err := objects.Commit(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 456, commitID)
 
@@ -213,7 +214,7 @@ func TestServerObjectsSetWithCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Commit should work
-	commitID, err := objects.Commit()
+	commitID, err := objects.Commit(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 999, commitID)
 

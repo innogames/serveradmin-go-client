@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -26,7 +27,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	q, err := adminapi.FromQuery(query)
+	client, err := adminapi.NewClientFromEnv()
+	if err != nil {
+		fmt.Println("Error configuring client:", err)
+		os.Exit(1)
+	}
+
+	q, err := client.FromQuery(query)
 	if err != nil {
 		fmt.Println("Error parsing query:", err)
 		os.Exit(1)
@@ -36,7 +43,7 @@ func main() {
 	q.SetAttributes(attributeList...)
 	q.OrderBy(orderBy)
 
-	servers, err := q.All()
+	servers, err := q.All(context.Background())
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

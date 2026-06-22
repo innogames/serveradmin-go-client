@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -8,6 +9,7 @@ import (
 
 // Query is a struct to build a query to the SA API
 type Query struct {
+	client               *Client
 	filters              Filters
 	restrictedAttributes []string
 	orderBy              string
@@ -24,22 +26,47 @@ func (a Attributes) Has(key string) bool {
 	return ok
 }
 
-// FromQuery creates a new Query object from a query string
+// FromQuery creates a new Query object from a query string.
+//
+// Deprecated: use Client.FromQuery so the request uses an explicit, per-instance
+// configuration instead of a process-global one built from environment variables.
 func FromQuery(query string) (Query, error) {
+	return newQueryFromString(nil, query)
+}
+
+// NewQuery initializes a new query which loads data from SA if needed.
+//
+// Deprecated: use Client.NewQuery so the request uses an explicit, per-instance
+// configuration instead of a process-global one built from environment variables.
+func NewQuery(filters Filters) Query {
+	return newQuery(nil, filters)
+}
+
+// FromQuery creates a new Query object from a query string, bound to this client.
+func (c *Client) FromQuery(query string) (Query, error) {
+	return newQueryFromString(c, query)
+}
+
+// NewQuery initializes a new query bound to this client.
+func (c *Client) NewQuery(filters Filters) Query {
+	return newQuery(c, filters)
+}
+
+func newQuery(client *Client, filters Filters) Query {
+	return Query{
+		client:               client,
+		filters:              filters,
+		restrictedAttributes: []string{"object_id", "hostname"},
+	}
+}
+
+func newQueryFromString(client *Client, query string) (Query, error) {
 	filters, err := ParseQuery(query)
 	if err != nil {
 		return Query{}, fmt.Errorf("parsing query %s: %w", query, err)
 	}
 
-	return NewQuery(filters), nil
-}
-
-// NewQuery initialize a new query which loads data from SA if needed
-func NewQuery(filters Filters) Query {
-	return Query{
-		filters:              filters,
-		restrictedAttributes: []string{"object_id", "hostname"},
-	}
+	return newQuery(client, filters), nil
 }
 
 // SetAttributes replaces the list of attributes to fetch from the API
@@ -63,8 +90,8 @@ func (q *Query) AddFilter(attribute string, filter any) {
 }
 
 // Count matching SA objects
-func (q *Query) Count() (int, error) {
-	err := q.load()
+func (q *Query) Count(ctx context.Context) (int, error) {
+	err := q.load(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -73,8 +100,8 @@ func (q *Query) Count() (int, error) {
 }
 
 // All returns all matching SA objects
-func (q *Query) All() (ServerObjects, error) {
-	err := q.load()
+func (q *Query) All(ctx context.Context) (ServerObjects, error) {
+	err := q.load(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +111,8 @@ func (q *Query) All() (ServerObjects, error) {
 
 // One returns exactly one matching SA object. If there is none or more than one, an error is returned.
 // Returns ErrNoResults if no objects match, or a wrapped ErrMultipleResults if more than one matches.
-func (q *Query) One() (*ServerObject, error) {
-	err := q.load()
+func (q *Query) One(ctx context.Context) (*ServerObject, error) {
+	err := q.load(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -100,9 +127,14 @@ func (q *Query) One() (*ServerObject, error) {
 	}
 }
 
-func (q *Query) load() error {
+func (q *Query) load(ctx context.Context) error {
 	if q.loaded {
 		return nil
+	}
+
+	client, err := q.resolveClient()
+	if err != nil {
+		return err
 	}
 
 	// always add "object_id" as attribute as we need it to modify the object
@@ -116,7 +148,7 @@ func (q *Query) load() error {
 		OrderBy:    q.orderBy, // todo fix serverside ordering in API or do it on client side
 	}
 
-	resp, err := sendRequest(apiEndpointQuery, request)
+	resp, err := client.sendRequest(ctx, apiEndpointQuery, request)
 	if err != nil {
 		return fmt.Errorf("querying %s: %w", apiEndpointQuery, err)
 	}
@@ -127,10 +159,12 @@ func (q *Query) load() error {
 		return fmt.Errorf("decoding query response: %w", err)
 	}
 
-	// map attribute map into ServerObject objects
+	// map attribute map into ServerObject objects, stamping the client so later
+	// Commit calls reuse the same configuration.
 	q.serverObjects = make(ServerObjects, len(respServer.Result))
 	for idx, object := range respServer.Result {
 		q.serverObjects[idx] = &ServerObject{
+			client:     client,
 			attributes: object,
 			oldValues:  Attributes{},
 		}
@@ -138,6 +172,15 @@ func (q *Query) load() error {
 	q.loaded = true
 
 	return nil
+}
+
+// resolveClient returns the query's bound client, falling back to the lazily
+// built environment-based default client for the deprecated package-level API.
+func (q *Query) resolveClient() (*Client, error) {
+	if q.client != nil {
+		return q.client, nil
+	}
+	return defaultClient()
 }
 
 // like {"Filters": {"hostname": {"Regexp": "foo.local.*"}}, "restrict": ["hostname", "object_id"]}
