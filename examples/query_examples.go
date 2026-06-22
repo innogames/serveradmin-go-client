@@ -33,7 +33,7 @@ func clientExample() {
 
 func stringQueryExample() {
 	// Simple string-based query
-	q, err := api.FromQuery("hostname=webserver01 environment=production")
+	q, err := client.FromQuery("hostname=webserver01 environment=production")
 	checkErr(err)
 
 	servers, err := q.All(context.Background())
@@ -44,7 +44,7 @@ func stringQueryExample() {
 
 func simpleFilterExample() {
 	// Create query programmatically with simple filters passed directly
-	q := api.NewQuery(api.Filters{
+	q := client.NewQuery(api.Filters{
 		"environment": "production",
 		"state":       "online",
 		"num_cpu":     api.LessThanOrEquals(4),
@@ -59,7 +59,7 @@ func simpleFilterExample() {
 
 func regexpFilterExample() {
 	// Use Regexp filter to match hostnames
-	q := api.NewQuery(api.Filters{
+	q := client.NewQuery(api.Filters{
 		"hostname":    api.Regexp("^web.*\\.example\\.com$"),
 		"environment": "production",
 	})
@@ -72,7 +72,7 @@ func regexpFilterExample() {
 
 func anyAnyFilterExample() {
 	// Use Any filter to match multiple possible values
-	q := api.NewQuery(api.Filters{
+	q := client.NewQuery(api.Filters{
 		"game_world": api.GreaterThan(1),
 		"state":      api.Any("online", "maintenance"),
 	})
@@ -84,7 +84,7 @@ func anyAnyFilterExample() {
 
 func nestedFilterExample() {
 	// Complex nested filters: servers that don't match certain patterns
-	q := api.NewQuery(api.Filters{})
+	q := client.NewQuery(api.Filters{})
 
 	// Find servers where hostname is NOT matching any of these patterns
 	q.AddFilter("hostname", api.Not(api.Any(
@@ -103,7 +103,7 @@ func nestedFilterExample() {
 }
 
 func combinedFilterExample() {
-	q := api.NewQuery(api.Filters{})
+	q := client.NewQuery(api.Filters{})
 
 	q.AddFilter("servertype", "server")
 	q.AddFilter("environment", "production")
@@ -146,7 +146,7 @@ func combinedFilterExample() {
 
 func multiAttrExample() {
 	// Fetch a server with multi-valued attributes
-	q, err := api.FromQuery("hostname=webserver01")
+	q, err := client.FromQuery("hostname=webserver01")
 	checkErr(err)
 
 	server, err := q.One(context.Background())

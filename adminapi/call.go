@@ -21,19 +21,6 @@ type callResponse struct {
 	Message string `json:"message"`
 }
 
-// CallAPI calls a remote API function on the Serveradmin server.
-// It takes a function group, function name, and keyword arguments as a map.
-//
-// Deprecated: use Client.CallAPI so the request uses an explicit, per-instance
-// configuration instead of a process-global one built from environment variables.
-func CallAPI(group, function string, args map[string]any) (any, error) {
-	client, err := defaultClient()
-	if err != nil {
-		return nil, err
-	}
-	return client.CallAPI(context.Background(), group, function, args)
-}
-
 // CallAPI calls a remote API function on the Serveradmin server using this client.
 // It takes a function group, function name, and keyword arguments as a map.
 func (c *Client) CallAPI(ctx context.Context, group, function string, args map[string]any) (any, error) {

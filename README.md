@@ -30,9 +30,8 @@ export SERVERADMIN_TOKEN="your-auth-token"
 # or set SERVERADMIN_KEY_PATH to an SSH private key, or have SSH_AUTH_SOCK available
 ```
 
-These variables are read only by the deprecated package-level functions and by
-`adminapi.NewClientFromEnv()`. The recommended `NewClient(Config{...})` path
-reads no environment variables.
+These variables are read only by `adminapi.NewClientFromEnv()`. The primary
+`NewClient(Config{...})` constructor reads no environment variables.
 
 ## Usage
 
@@ -89,29 +88,24 @@ func main() {
 ```
 
 Authentication is selected **explicitly** from `Config`, in the order
-`SSHSigner` → `KeyPath` → `Token`. Unlike the legacy environment path, an
-ambient `SSH_AUTH_SOCK` can never silently override an explicitly configured
+`SSHSigner` → `KeyPath` → `Token`. There is no ambient environment precedence, so
+an inherited `SSH_AUTH_SOCK` can never silently override an explicitly configured
 token.
 
-For deployments that are still configured entirely through environment
-variables (for example the CLI), `adminapi.NewClientFromEnv()` builds a `Client`
-from the `SERVERADMIN_*` variables.
+For deployments that are configured entirely through environment variables (for
+example the CLI), `adminapi.NewClientFromEnv()` builds a `Client` from the
+`SERVERADMIN_*` variables, applying the precedence
+`SERVERADMIN_KEY_PATH` → `SSH_AUTH_SOCK` → `SERVERADMIN_TOKEN`.
+
+All entry points hang off a `Client` (`client.NewQuery`, `client.FromQuery`,
+`client.NewObject`, `client.CallAPI`) and every network call
+(`All`, `One`, `Count`, `Commit`) takes a `context.Context`.
 
 #### Typed attribute getters
 
 `Get` returns `any` and converts JSON numbers to `int` (lossy). When you need to
 preserve numeric type, use the typed getters: `GetInt`, `GetFloat`, `GetBool`
 (alongside the existing `GetString` and `GetMulti`).
-
-### Deprecated: package-level functions and the global env client
-
-The package-level `adminapi.FromQuery` / `NewQuery` / `CallAPI` / `NewObject`
-still work: they lazily build a single process-global client from the
-`SERVERADMIN_*` environment variables (the historical behavior). They are
-**deprecated** in favor of an explicit `Client`, because the global config is
-frozen after the first request and cannot serve multiple targets. Note that the
-execution methods (`All`, `One`, `Count`, `Commit`) now require a
-`context.Context` regardless of which path you use.
 
 ### As a CLI Tool
 
@@ -146,7 +140,7 @@ client, _ := adminapi.NewClient(adminapi.Config{
     KeyPath: "/path/to/id_ed25519", // or SSHSigner: <ssh.Signer>
 })
 
-// Env path (deprecated): SERVERADMIN_KEY_PATH, or a running SSH agent via SSH_AUTH_SOCK.
+// Env path via NewClientFromEnv(): SERVERADMIN_KEY_PATH, or an SSH agent via SSH_AUTH_SOCK.
 ```
 
 ### Security Token Authentication
@@ -158,7 +152,7 @@ client, _ := adminapi.NewClient(adminapi.Config{
     Token:   "your-token",
 })
 
-// Env path (deprecated): set SERVERADMIN_TOKEN.
+// Env path via NewClientFromEnv(): set SERVERADMIN_TOKEN.
 ```
 
 ## Examples

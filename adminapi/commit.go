@@ -88,24 +88,23 @@ func (s *ServerObject) Commit(ctx context.Context) (int, error) {
 	return commitID, nil
 }
 
-// resolveClient returns the object's bound client, falling back to the lazily
-// built environment-based default client for the deprecated package-level API.
+// resolveClient returns the object's bound client.
 func (s *ServerObject) resolveClient() (*Client, error) {
-	if s.client != nil {
-		return s.client, nil
+	if s.client == nil {
+		return nil, errors.New("object is not bound to a client; obtain it via a Client query or Client.NewObject")
 	}
-	return defaultClient()
+	return s.client, nil
 }
 
-// resolveObjectsClient returns the first non-nil client among the objects,
-// falling back to the environment-based default client.
+// resolveObjectsClient returns the client bound to the objects. All objects in a
+// set are expected to originate from the same client.
 func resolveObjectsClient(objects ServerObjects) (*Client, error) {
 	for _, obj := range objects {
 		if obj.client != nil {
 			return obj.client, nil
 		}
 	}
-	return defaultClient()
+	return nil, errors.New("no object is bound to a client; obtain them via a Client query")
 }
 
 func buildCommit(objects ServerObjects) commitRequest {

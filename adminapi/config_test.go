@@ -2,20 +2,11 @@ package adminapi
 
 import (
 	"net/http/httptest"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// The deprecated package-level API resolves its configuration through
-// defaultClient, which caches the env-based Client via sync.OnceValues. Tests
-// that change SERVERADMIN_* env vars must call resetConfig() first so the next
-// access rebuilds the client from the new environment.
-func resetConfig() {
-	defaultClient = sync.OnceValues(buildDefaultClient)
-}
 
 func TestConfigFromEnv(t *testing.T) {
 	// without SERVERADMIN_BASE_URL set

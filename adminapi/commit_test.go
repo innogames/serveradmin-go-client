@@ -24,11 +24,10 @@ func TestCommitSingle(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
 	obj := &ServerObject{
+		client:     client,
 		attributes: Attributes{"hostname": "new.local", "object_id": float64(42)},
 		oldValues:  Attributes{"hostname": "old.local"},
 	}
@@ -59,9 +58,7 @@ func TestCommitResultSet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
 	objects := ServerObjects{
 		{
@@ -77,6 +74,10 @@ func TestCommitResultSet(t *testing.T) {
 			oldValues:  Attributes{},
 			deleted:    true,
 		},
+	}
+
+	for _, o := range objects {
+		o.client = client
 	}
 
 	commitID, err := objects.Commit(context.Background())
@@ -194,9 +195,7 @@ func TestServerObjectsSetWithCommit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
 	objects := ServerObjects{
 		{
@@ -214,6 +213,10 @@ func TestServerObjectsSetWithCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Commit should work
+	for _, o := range objects {
+		o.client = client
+	}
+
 	commitID, err := objects.Commit(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 999, commitID)

@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -23,11 +24,9 @@ func TestCallAPISuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	result, err := CallAPI("ip", "get_free", map[string]any{"network": "internal"})
+	result, err := client.CallAPI(context.Background(), "ip", "get_free", map[string]any{"network": "internal"})
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.1", result)
 
@@ -45,11 +44,9 @@ func TestCallAPIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	result, err := CallAPI("ip", "nonexistent", map[string]any{})
+	result, err := client.CallAPI(context.Background(), "ip", "nonexistent", map[string]any{})
 	assert.Nil(t, result)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ip.nonexistent")
@@ -63,11 +60,9 @@ func TestCallAPIComplexReturnValue(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	result, err := CallAPI("ip", "get_details", map[string]any{"ip": "10.0.0.1"})
+	result, err := client.CallAPI(context.Background(), "ip", "get_details", map[string]any{"ip": "10.0.0.1"})
 	require.NoError(t, err)
 
 	resultMap, ok := result.(map[string]any)
@@ -88,11 +83,9 @@ func TestCallAPINilArgs(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	result, err := CallAPI("system", "ping", nil)
+	result, err := client.CallAPI(context.Background(), "system", "ping", nil)
 	require.NoError(t, err)
 	assert.Nil(t, result)
 

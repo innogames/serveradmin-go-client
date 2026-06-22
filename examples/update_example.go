@@ -8,7 +8,7 @@ import (
 )
 
 func singleObjectExample() {
-	q, err := api.FromQuery("hostname=webserver01")
+	q, err := client.FromQuery("hostname=webserver01")
 	checkErr(err)
 	q.AddAttributes("backup_disabled", "tags")
 
@@ -31,7 +31,7 @@ func singleObjectExample() {
 }
 
 func multiObjectExample() {
-	q, err := api.FromQuery("environment=production state=online")
+	q, err := client.FromQuery("environment=production state=online")
 	checkErr(err)
 	q.SetAttributes("hostname", "backup_disabled")
 
@@ -51,7 +51,7 @@ func multiObjectExample() {
 func createObjectExample() {
 	// Create a new VM object — NewObject fetches defaults, sets attributes, commits,
 	// and re-queries to populate object_id in a single call.
-	newVM, err := api.NewObject("vm", api.Attributes{
+	newVM, err := client.NewObject(context.Background(), "vm", api.Attributes{
 		"hostname":    "newserver.example.com",
 		"environment": "development",
 		"num_cpu":     4,
@@ -62,7 +62,7 @@ func createObjectExample() {
 }
 
 func deleteObjectExample() {
-	q, err := api.FromQuery("hostname=oldserver.example.com")
+	q, err := client.FromQuery("hostname=oldserver.example.com")
 	checkErr(err)
 
 	server, err := q.One(context.Background())
@@ -79,7 +79,7 @@ func deleteObjectExample() {
 }
 
 func batchDeleteExample() {
-	q, err := api.FromQuery("servertype=domain state=retired")
+	q, err := client.FromQuery("servertype=domain state=retired")
 	checkErr(err)
 
 	servers, err := q.All(context.Background())
@@ -97,14 +97,14 @@ func batchDeleteExample() {
 
 func callAPIExample() {
 	// Call a remote API function
-	result, err := api.CallAPI("ip", "get_free", map[string]any{"network": "internal"})
+	result, err := client.CallAPI(context.Background(), "ip", "get_free", map[string]any{"network": "internal"})
 	checkErr(err)
 
 	fmt.Printf("Free IP: %s\n", result)
 }
 
 func rollbackExample() {
-	q, err := api.FromQuery("hostname=webserver01")
+	q, err := client.FromQuery("hostname=webserver01")
 	checkErr(err)
 
 	server, err := q.One(context.Background())

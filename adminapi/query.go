@@ -3,6 +3,7 @@ package adminapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -24,22 +25,6 @@ type Attributes map[string]any
 func (a Attributes) Has(key string) bool {
 	_, ok := a[key]
 	return ok
-}
-
-// FromQuery creates a new Query object from a query string.
-//
-// Deprecated: use Client.FromQuery so the request uses an explicit, per-instance
-// configuration instead of a process-global one built from environment variables.
-func FromQuery(query string) (Query, error) {
-	return newQueryFromString(nil, query)
-}
-
-// NewQuery initializes a new query which loads data from SA if needed.
-//
-// Deprecated: use Client.NewQuery so the request uses an explicit, per-instance
-// configuration instead of a process-global one built from environment variables.
-func NewQuery(filters Filters) Query {
-	return newQuery(nil, filters)
 }
 
 // FromQuery creates a new Query object from a query string, bound to this client.
@@ -174,13 +159,12 @@ func (q *Query) load(ctx context.Context) error {
 	return nil
 }
 
-// resolveClient returns the query's bound client, falling back to the lazily
-// built environment-based default client for the deprecated package-level API.
+// resolveClient returns the query's bound client.
 func (q *Query) resolveClient() (*Client, error) {
-	if q.client != nil {
-		return q.client, nil
+	if q.client == nil {
+		return nil, errors.New("query is not bound to a client; use Client.NewQuery or Client.FromQuery")
 	}
-	return defaultClient()
+	return q.client, nil
 }
 
 // like {"Filters": {"hostname": {"Regexp": "foo.local.*"}}, "restrict": ["hostname", "object_id"]}

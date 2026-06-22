@@ -14,13 +14,20 @@ func checkErr(err error) {
 	}
 }
 
+// client is a shared example client. Replace BaseURL/Token with your own, or use
+// api.NewClientFromEnv() to configure it from the SERVERADMIN_* environment.
+var client, _ = api.NewClient(api.Config{
+	BaseURL: "https://serveradmin.example.com",
+	Token:   "your-token",
+})
+
 func main() {
 	ctx := context.Background()
 	var commitID int
 
 	// Step 1: Check if object already exists
 	log.Println("=== Checking for existing public_domain object ===")
-	q, err := api.FromQuery("hostname=test.foo.com servertype=public_domain")
+	q, err := client.FromQuery("hostname=test.foo.com servertype=public_domain")
 	checkErr(err)
 	q.AddAttributes("dns_txt")
 
@@ -28,7 +35,7 @@ func main() {
 	if err != nil {
 		// Object doesn't exist, create it
 		log.Println("=== Object not found, creating new public_domain object ===")
-		publicURL, err = api.NewObject("public_domain", api.Attributes{
+		publicURL, err = client.NewObject(ctx, "public_domain", api.Attributes{
 			"hostname": "test.foo.com",
 			"project":  "admin",
 			"dns_txt":  api.MultiAttr{},

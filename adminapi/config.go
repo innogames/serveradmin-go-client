@@ -1,12 +1,12 @@
 package adminapi
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"net"
 	"os"
-	"sync"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -16,16 +16,6 @@ const (
 	version   = "4.9.0"
 	userAgent = "Adminapi Go Client " + version
 )
-
-// defaultClient lazily builds a Client from environment variables. It backs the
-// deprecated package-level functions (FromQuery, NewQuery, CallAPI, NewObject)
-// so existing env-based callers keep working. The client is immutable once
-// built, so no mutable config remains in the request path.
-var defaultClient = sync.OnceValues(buildDefaultClient)
-
-func buildDefaultClient() (*Client, error) {
-	return NewClientFromEnv()
-}
 
 // NewClientFromEnv builds a Client from the SERVERADMIN_* environment variables,
 // applying the legacy auth precedence SERVERADMIN_KEY_PATH > SSH_AUTH_SOCK >
@@ -79,7 +69,8 @@ func configFromEnv() (Config, error) {
 // agentSigner connects to the SSH agent at authSock and returns the first signer
 // that can produce a signature.
 func agentSigner(authSock string) (ssh.Signer, error) {
-	sock, err := net.Dial("unix", authSock)
+	var dialer net.Dialer
+	sock, err := dialer.DialContext(context.Background(), "unix", authSock)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to SSH agent: %w", err)
 	}

@@ -25,11 +25,9 @@ func TestFakeServer(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "1234567890")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	query := NewQuery(Filters{
+	query := client.NewQuery(Filters{
 		"hostname": Any(Regexp("test.foo.local"), Regexp(".*\\.bar.local")),
 	})
 	query.SetAttributes("hostname")
@@ -99,11 +97,9 @@ func TestHTTPErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			resetConfig()
-			t.Setenv("SERVERADMIN_TOKEN", "1234567890")
-			t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+			client := mustClient(t, server.URL)
 
-			query := NewQuery(Filters{
+			query := client.NewQuery(Filters{
 				"hostname": Regexp("test.local"),
 			})
 			query.SetAttributes("hostname")
