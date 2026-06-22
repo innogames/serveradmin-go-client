@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -94,11 +95,9 @@ func TestNewObject(t *testing.T) {
 			}))
 			defer server.Close()
 
-			resetConfig()
-			t.Setenv("SERVERADMIN_TOKEN", "test-token-1234")
-			t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+			client := mustClient(t, server.URL)
 
-			obj, err := NewObject(tt.serverType, tt.attributes)
+			obj, err := client.NewObject(context.Background(), tt.serverType, tt.attributes)
 
 			require.NoError(t, err)
 			require.NotNil(t, obj)
@@ -120,7 +119,8 @@ func TestNewObject(t *testing.T) {
 }
 
 func TestNewObject_MissingHostname(t *testing.T) {
-	obj, err := NewObject("vm", Attributes{"environment": "dev"})
+	client := mustClient(t, "https://example.com")
+	obj, err := client.NewObject(context.Background(), "vm", Attributes{"environment": "dev"})
 
 	require.Error(t, err)
 	assert.Nil(t, obj)
@@ -141,11 +141,9 @@ func TestNewObject_UnknownAttribute(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "test-token-1234")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	obj, err := NewObject("vm", Attributes{
+	obj, err := client.NewObject(context.Background(), "vm", Attributes{
 		"hostname":          "test.local",
 		"nonexistent_field": "value",
 	})
@@ -162,11 +160,9 @@ func TestNewObject_HTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "test-token-1234")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	obj, err := NewObject("invalid-type", Attributes{"hostname": "test.local"})
+	obj, err := client.NewObject(context.Background(), "invalid-type", Attributes{"hostname": "test.local"})
 
 	require.Error(t, err)
 	assert.Nil(t, obj)
@@ -193,11 +189,9 @@ func TestNewObject_CommitFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "test-token-1234")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	obj, err := NewObject("vm", Attributes{"hostname": "test.local"})
+	obj, err := client.NewObject(context.Background(), "vm", Attributes{"hostname": "test.local"})
 
 	require.Error(t, err)
 	assert.Nil(t, obj)
@@ -231,11 +225,9 @@ func TestNewObject_CommitPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "test-token-1234")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	_, err := NewObject("vm", Attributes{
+	_, err := client.NewObject(context.Background(), "vm", Attributes{
 		"hostname": "test.local",
 		"project":  "admin",
 	})

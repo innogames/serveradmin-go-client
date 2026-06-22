@@ -11,6 +11,7 @@ type ServerObjects []*ServerObject
 
 // ServerObject is a map of key-value attributes of a SA object
 type ServerObject struct {
+	client     *Client // client used to commit this object; nil falls back to the env default
 	attributes Attributes
 	oldValues  Attributes // tracks original values before first modification
 	deleted    bool
@@ -34,6 +35,49 @@ func (s *ServerObject) GetString(attribute string) string {
 		return strVal
 	}
 	return ""
+}
+
+// GetInt safely retrieves an attribute as an int. JSON numbers decode as
+// float64 and are truncated; an existing int or json.Number is also handled.
+// Returns 0 if the attribute is missing or not numeric.
+func (s *ServerObject) GetInt(attribute string) int {
+	switch v := s.attributes[attribute].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case json.Number:
+		if i, err := v.Int64(); err == nil {
+			return int(i)
+		}
+	}
+	return 0
+}
+
+// GetFloat safely retrieves an attribute as a float64 without the lossy
+// float64->int conversion performed by Get. Returns 0 if the attribute is
+// missing or not numeric.
+func (s *ServerObject) GetFloat(attribute string) float64 {
+	switch v := s.attributes[attribute].(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case json.Number:
+		if f, err := v.Float64(); err == nil {
+			return f
+		}
+	}
+	return 0
+}
+
+// GetBool safely retrieves an attribute as a bool. Returns false if the
+// attribute is missing or not a bool.
+func (s *ServerObject) GetBool(attribute string) bool {
+	if v, ok := s.attributes[attribute].(bool); ok {
+		return v
+	}
+	return false
 }
 
 // GetMulti safely retrieves a multi-valued attribute as a MultiAttr.

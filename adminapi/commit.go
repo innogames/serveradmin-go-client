@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,10 +22,15 @@ type commitResponse struct {
 }
 
 // Commit commits all changed, created, and deleted objects in a single API call.
-func (s ServerObjects) Commit() (int, error) {
+func (s ServerObjects) Commit(ctx context.Context) (int, error) {
+	client, err := resolveObjectsClient(s)
+	if err != nil {
+		return 0, err
+	}
+
 	commit := buildCommit(s)
 
-	commitID, err := sendCommit(commit)
+	commitID, err := client.sendCommit(ctx, commit)
 	if err != nil {
 		return 0, err
 	}
@@ -66,15 +72,39 @@ func (s ServerObjects) Delete() {
 }
 
 // Commit commits this single object's changes to the server.
-func (s *ServerObject) Commit() (int, error) {
+func (s *ServerObject) Commit(ctx context.Context) (int, error) {
+	client, err := s.resolveClient()
+	if err != nil {
+		return 0, err
+	}
+
 	commit := buildCommit(ServerObjects{s})
-	commitID, err := sendCommit(commit)
+	commitID, err := client.sendCommit(ctx, commit)
 	if err != nil {
 		return 0, err
 	}
 
 	s.confirmChanges()
 	return commitID, nil
+}
+
+// resolveClient returns the object's bound client.
+func (s *ServerObject) resolveClient() (*Client, error) {
+	if s.client == nil {
+		return nil, errors.New("object is not bound to a client; obtain it via a Client query or Client.NewObject")
+	}
+	return s.client, nil
+}
+
+// resolveObjectsClient returns the client bound to the objects. All objects in a
+// set are expected to originate from the same client.
+func resolveObjectsClient(objects ServerObjects) (*Client, error) {
+	for _, obj := range objects {
+		if obj.client != nil {
+			return obj.client, nil
+		}
+	}
+	return nil, errors.New("no object is bound to a client; obtain them via a Client query")
 }
 
 func buildCommit(objects ServerObjects) commitRequest {
@@ -100,8 +130,8 @@ func buildCommit(objects ServerObjects) commitRequest {
 	return commit
 }
 
-func sendCommit(commit commitRequest) (int, error) {
-	resp, err := sendRequest(apiEndpointCommit, commit)
+func (c *Client) sendCommit(ctx context.Context, commit commitRequest) (int, error) {
+	resp, err := c.sendRequest(ctx, apiEndpointCommit, commit)
 	if err != nil {
 		return 0, err
 	}

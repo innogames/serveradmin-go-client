@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -20,9 +21,9 @@ type callResponse struct {
 	Message string `json:"message"`
 }
 
-// CallAPI calls a remote API function on the Serveradmin server.
+// CallAPI calls a remote API function on the Serveradmin server using this client.
 // It takes a function group, function name, and keyword arguments as a map.
-func CallAPI(group, function string, args map[string]any) (any, error) {
+func (c *Client) CallAPI(ctx context.Context, group, function string, args map[string]any) (any, error) {
 	req := callRequest{
 		Group:  group,
 		Name:   function,
@@ -30,7 +31,7 @@ func CallAPI(group, function string, args map[string]any) (any, error) {
 		Kwargs: args,
 	}
 
-	resp, err := sendRequest(apiEndpointCall, req)
+	resp, err := c.sendRequest(ctx, apiEndpointCall, req)
 	if err != nil {
 		return nil, err
 	}

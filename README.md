@@ -10,7 +10,7 @@ Serveradmin is a central server database management system used by InnoGames. Th
 - Retrieve server attributes and metadata
 - Authenticate using SSH keys or security tokens
 - Use as both a library and command-line tool
-- Soon: Create and modify server objects
+- Create, modify, and delete server objects with change tracking
 
 ## Installation
 
@@ -26,46 +26,86 @@ The client requires configuration to connect to your Serveradmin instance. Creat
 
 ```bash
 export SERVERADMIN_BASE_URL="https://your-serveradmin-instance.com"
-export SERVERADMIN_AUTH_TOKEN="your-auth-token"
-or have a SSH_AUTH_SOCKET available
+export SERVERADMIN_TOKEN="your-auth-token"
+# or set SERVERADMIN_KEY_PATH to an SSH private key, or have SSH_AUTH_SOCK available
 ```
+
+These variables are read only by `adminapi.NewClientFromEnv()`. The primary
+`NewClient(Config{...})` constructor reads no environment variables.
 
 ## Usage
 
-### As a Go Library
+### As a Go Library (recommended: explicit Client)
+
+The recommended entry point is an explicit, per-instance `Client` built with
+`NewClient(Config{...})`. A `Client` reads no environment variables, holds its
+own `*http.Client`, and is safe for concurrent use — so a single process can
+serve several targets with different URLs/credentials at once. Every network
+call takes a `context.Context`, giving the caller control over cancellation and
+timeouts.
 
 ```go
 package main
 
 import (
+    "context"
     "fmt"
+    "time"
+
     "github.com/innogames/serveradmin-go-client/adminapi"
 )
 
 func main() {
-    // Create a query
-    query, err := adminapi.FromQuery("hostname=web*")
+    // Construct a client with explicit configuration — no env reads, no globals.
+    client, err := adminapi.NewClient(adminapi.Config{
+        BaseURL: "https://your-serveradmin-instance.com",
+        Token:   "your-token", // or: SSHSigner / KeyPath for SSH auth
+        Timeout: 10 * time.Second,
+    })
     if err != nil {
         panic(err)
     }
 
-    // Set attributes to retrieve
-    query.SetAttributes([]string{"hostname", "ip", "environment"})
+    ctx := context.Background()
 
-    // Execute query
-    servers, err := query.All()
+    // Build a query bound to this client.
+    query, err := client.FromQuery("hostname=web*")
+    if err != nil {
+        panic(err)
+    }
+    query.SetAttributes("hostname", "intern_ip", "environment")
+
+    // Execute the query.
+    servers, err := query.All(ctx)
     if err != nil {
         panic(err)
     }
 
-    // Process results
     for _, server := range servers {
-        hostname := server.Get("hostname")
-        ip := server.Get("ip")
-        fmt.Printf("Server: %s (%s)\n", hostname, ip)
+        fmt.Printf("Server: %s (%s)\n", server.GetString("hostname"), server.GetString("intern_ip"))
     }
 }
 ```
+
+Authentication is selected **explicitly** from `Config`, in the order
+`SSHSigner` → `KeyPath` → `Token`. There is no ambient environment precedence, so
+an inherited `SSH_AUTH_SOCK` can never silently override an explicitly configured
+token.
+
+For deployments that are configured entirely through environment variables (for
+example the CLI), `adminapi.NewClientFromEnv()` builds a `Client` from the
+`SERVERADMIN_*` variables, applying the precedence
+`SERVERADMIN_KEY_PATH` → `SSH_AUTH_SOCK` → `SERVERADMIN_TOKEN`.
+
+All entry points hang off a `Client` (`client.NewQuery`, `client.FromQuery`,
+`client.NewObject`, `client.CallAPI`) and every network call
+(`All`, `One`, `Count`, `Commit`) takes a `context.Context`.
+
+#### Typed attribute getters
+
+`Get` returns `any` and converts JSON numbers to `int` (lossy). When you need to
+preserve numeric type, use the typed getters: `GetInt`, `GetFloat`, `GetBool`
+(alongside the existing `GetString` and `GetMulti`).
 
 ### As a CLI Tool
 
@@ -94,17 +134,25 @@ The client supports Serveradmin's query language for filtering servers:
 ### SSH Key Authentication (Recommended)
 
 ```go
-// The client will automatically use SSH keys from:
-// - SSH agent
-// - ~/.ssh/id_rsa (or other default keys)
-// - Path specified in SERVERADMIN_SSH_KEY_PATH
+// Explicit client: provide a pre-built signer or a key file path.
+client, _ := adminapi.NewClient(adminapi.Config{
+    BaseURL: "https://your-serveradmin-instance.com",
+    KeyPath: "/path/to/id_ed25519", // or SSHSigner: <ssh.Signer>
+})
+
+// Env path via NewClientFromEnv(): SERVERADMIN_KEY_PATH, or an SSH agent via SSH_AUTH_SOCK.
 ```
 
 ### Security Token Authentication
 
 ```go
-// Set SERVERADMIN_AUTH_TOKEN environment variable
-// or configure in your config file
+// Explicit client.
+client, _ := adminapi.NewClient(adminapi.Config{
+    BaseURL: "https://your-serveradmin-instance.com",
+    Token:   "your-token",
+})
+
+// Env path via NewClientFromEnv(): set SERVERADMIN_TOKEN.
 ```
 
 ## Examples
@@ -112,41 +160,42 @@ The client supports Serveradmin's query language for filtering servers:
 ### Creating a New Server
 
 ```go
-// Create a new VM server
-newServer, err := adminapi.NewServer("vm")
+// NewObject fetches defaults, applies attributes, commits, and re-queries to
+// populate object_id — all bound to the client and the provided context.
+newServer, err := client.NewObject(ctx, "vm", adminapi.Attributes{
+    "hostname":    "newwebserver",
+    "environment": "staging",
+})
 if err != nil {
     panic(err)
 }
-
-// Set attributes
-newServer.Set("hostname", "newwebserver")
-newServer.Set("environment", "staging")
-newServer.Set("ip", "192.168.1.100")
-
-// Commit to Serveradmin
-err = newServer.Commit()
+fmt.Printf("Created %s (object_id %d)\n", newServer.GetString("hostname"), newServer.ObjectID())
 ```
 
 ### Modifying Existing Servers
 
 ```go
-// Find and modify a server
-query, _ := adminapi.FromQuery("hostname=webserver01")
-server := query.One()
+// Find and modify a server.
+query, _ := client.FromQuery("hostname=webserver01")
+server, err := query.One(ctx)
+if err != nil {
+    panic(err)
+}
 
-// Update attributes
-server.Set("backup_disabled", "true")
-server.Set("maintenance_mode", "true")
+// Update attributes.
+server.Set("backup_disabled", true)
 
-// Commit changes
-server.Commit()
+// Commit changes.
+if _, err := server.Commit(ctx); err != nil {
+    panic(err)
+}
 ```
 
 ### Calling API Functions
 
 ```go
-// Call a remote API function by group and function name
-result, err := adminapi.CallAPI("ip", "get_free", map[string]any{"network": "internal"})
+// Call a remote API function by group and function name.
+result, err := client.CallAPI(ctx, "ip", "get_free", map[string]any{"network": "internal"})
 if err != nil {
     panic(err)
 }

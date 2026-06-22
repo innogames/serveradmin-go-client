@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,20 +25,19 @@ func TestFakeServer(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "1234567890")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
-	query := NewQuery(Filters{
+	query := client.NewQuery(Filters{
 		"hostname": Any(Regexp("test.foo.local"), Regexp(".*\\.bar.local")),
 	})
 	query.SetAttributes("hostname")
 
-	servers, err := query.All()
+	ctx := context.Background()
+	servers, err := query.All(ctx)
 	require.NoError(t, err)
 	assert.Len(t, servers, 1)
 
-	count, err := query.Count()
+	count, err := query.Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
@@ -50,7 +50,7 @@ func TestFakeServer(t *testing.T) {
 	assert.Nil(t, object.Get("nope"))
 	assert.Empty(t, object.GetString("nope"))
 
-	one, err := query.One()
+	one, err := query.One(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 483903, one.Get("object_id"))
 }
@@ -97,16 +97,14 @@ func TestHTTPErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			resetConfig()
-			t.Setenv("SERVERADMIN_TOKEN", "1234567890")
-			t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+			client := mustClient(t, server.URL)
 
-			query := NewQuery(Filters{
+			query := client.NewQuery(Filters{
 				"hostname": Regexp("test.local"),
 			})
 			query.SetAttributes("hostname")
 
-			servers, err := query.All()
+			servers, err := query.All(context.Background())
 			require.Error(t, err)
 			assert.Nil(t, servers)
 			assert.Contains(t, err.Error(), tc.expectedError)

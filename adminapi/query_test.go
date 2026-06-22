@@ -8,7 +8,7 @@ import (
 )
 
 func TestSetAttributes(t *testing.T) {
-	q := NewQuery(Filters{})
+	q := mustClient(t, "https://example.com").NewQuery(Filters{})
 
 	// Default attributes
 	assert.Equal(t, []string{"object_id", "hostname"}, q.restrictedAttributes)
@@ -23,7 +23,7 @@ func TestSetAttributes(t *testing.T) {
 }
 
 func TestAddAttributes(t *testing.T) {
-	q := NewQuery(Filters{})
+	q := mustClient(t, "https://example.com").NewQuery(Filters{})
 
 	// AddAttributes appends to defaults
 	q.AddAttributes("memory")
@@ -35,7 +35,7 @@ func TestAddAttributes(t *testing.T) {
 }
 
 func TestFilters(t *testing.T) {
-	q := NewQuery(Filters{
+	q := mustClient(t, "https://example.com").NewQuery(Filters{
 		"hostname":   NotEmpty(),
 		"num_cpu":    Regexp(".*GB"),
 		"hypervisor": StartsWith("datacenter-x-"),
@@ -49,7 +49,7 @@ func TestFilters(t *testing.T) {
 }
 
 func TestFromQuery(t *testing.T) {
-	q, err := FromQuery("hostname=not(empty()) num_cpu=regexp(.*GB)")
+	q, err := mustClient(t, "https://example.com").FromQuery("hostname=not(empty()) num_cpu=regexp(.*GB)")
 	require.NoError(t, err)
 	q.AddFilter("instance", 1)
 	q.OrderBy("num_cpu")
@@ -62,7 +62,7 @@ func TestFromQuery(t *testing.T) {
 }
 
 func TestFromQueryWithError(t *testing.T) {
-	q, err := FromQuery("hostname=not(empty(")
+	q, err := mustClient(t, "https://example.com").FromQuery("hostname=not(empty(")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmatched ( found")

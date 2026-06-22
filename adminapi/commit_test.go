@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -23,16 +24,15 @@ func TestCommitSingle(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
 	obj := &ServerObject{
+		client:     client,
 		attributes: Attributes{"hostname": "new.local", "object_id": float64(42)},
 		oldValues:  Attributes{"hostname": "old.local"},
 	}
 
-	commitID, err := obj.Commit()
+	commitID, err := obj.Commit(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 123, commitID)
 
@@ -58,9 +58,7 @@ func TestCommitResultSet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
 	objects := ServerObjects{
 		{
@@ -78,7 +76,11 @@ func TestCommitResultSet(t *testing.T) {
 		},
 	}
 
-	commitID, err := objects.Commit()
+	for _, o := range objects {
+		o.client = client
+	}
+
+	commitID, err := objects.Commit(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 456, commitID)
 
@@ -193,9 +195,7 @@ func TestServerObjectsSetWithCommit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resetConfig()
-	t.Setenv("SERVERADMIN_TOKEN", "testtoken")
-	t.Setenv("SERVERADMIN_BASE_URL", server.URL)
+	client := mustClient(t, server.URL)
 
 	objects := ServerObjects{
 		{
@@ -213,7 +213,11 @@ func TestServerObjectsSetWithCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Commit should work
-	commitID, err := objects.Commit()
+	for _, o := range objects {
+		o.client = client
+	}
+
+	commitID, err := objects.Commit(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 999, commitID)
 

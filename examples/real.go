@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	api "github.com/innogames/serveradmin-go-client/adminapi"
@@ -13,20 +14,28 @@ func checkErr(err error) {
 	}
 }
 
+// client is a shared example client. Replace BaseURL/Token with your own, or use
+// api.NewClientFromEnv() to configure it from the SERVERADMIN_* environment.
+var client, _ = api.NewClient(api.Config{
+	BaseURL: "https://serveradmin.example.com",
+	Token:   "your-token",
+})
+
 func main() {
+	ctx := context.Background()
 	var commitID int
 
 	// Step 1: Check if object already exists
 	log.Println("=== Checking for existing public_domain object ===")
-	q, err := api.FromQuery("hostname=test.foo.com servertype=public_domain")
+	q, err := client.FromQuery("hostname=test.foo.com servertype=public_domain")
 	checkErr(err)
 	q.AddAttributes("dns_txt")
 
-	publicURL, err := q.One()
+	publicURL, err := q.One(ctx)
 	if err != nil {
 		// Object doesn't exist, create it
 		log.Println("=== Object not found, creating new public_domain object ===")
-		publicURL, err = api.NewObject("public_domain", api.Attributes{
+		publicURL, err = client.NewObject(ctx, "public_domain", api.Attributes{
 			"hostname": "test.foo.com",
 			"project":  "admin",
 			"dns_txt":  api.MultiAttr{},
@@ -45,7 +54,7 @@ func main() {
 	publicURL.Set("dns_txt", dnsTxt)
 
 	// Commit the update
-	commitID, err = publicURL.Commit()
+	commitID, err = publicURL.Commit(ctx)
 	checkErr(err)
 	log.Printf("Set dns_txt to %v (commit ID: %d)\n", publicURL.Get("dns_txt"), commitID)
 
@@ -56,14 +65,14 @@ func main() {
 	publicURL.Set("dns_txt", dnsTxt)
 
 	// Commit the second update
-	commitID, err = publicURL.Commit()
+	commitID, err = publicURL.Commit(ctx)
 	checkErr(err)
 	log.Printf("Added to dns_txt, now: %v (commit ID: %d)\n", publicURL.Get("dns_txt"), commitID)
 
 	// Step 4: Delete the object
 	log.Println("\n=== Deleting object ===")
 	publicURL.Delete()
-	commitID, err = publicURL.Commit()
+	commitID, err = publicURL.Commit(ctx)
 	checkErr(err)
 	log.Printf("Deleted public_url (commit ID: %d)\n", commitID)
 

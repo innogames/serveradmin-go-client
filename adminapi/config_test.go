@@ -2,26 +2,16 @@ package adminapi
 
 import (
 	"net/http/httptest"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Because getConfig in config.go calls sync.OnceValues, the new values set to
-// SERVERADMIN_BASE_URL between test runs is never changed, as getConfig returns
-// cached values.
-// We use resetConfig() to reinitialize things, forcing getConfig() to return the
-// values from the new env variables.
-func resetConfig() {
-	getConfig = sync.OnceValues(loadConfig)
-}
-
-func TestLoadConfig(t *testing.T) {
-	// make a test without SERVERADMIN_BASE_URL set
+func TestConfigFromEnv(t *testing.T) {
+	// without SERVERADMIN_BASE_URL set
 	t.Setenv("SERVERADMIN_BASE_URL", "")
-	_, err := loadConfig()
+	_, err := configFromEnv()
 	require.Error(t, err, "env var SERVERADMIN_BASE_URL not set")
 
 	// spawn mocked serveradmin server
@@ -35,33 +25,43 @@ func TestLoadConfig(t *testing.T) {
 		t.Setenv("SERVERADMIN_KEY_PATH", "")
 		t.Setenv("SERVERADMIN_TOKEN", "jolo")
 
-		resetConfig()
-		cfg, err := loadConfig()
-
+		cfg, err := configFromEnv()
 		require.NoError(t, err)
-		assert.Nil(t, cfg.sshSigner)
-		assert.Equal(t, "jolo", string(cfg.authToken))
+		assert.Nil(t, cfg.SSHSigner)
+		assert.Empty(t, cfg.KeyPath)
+		assert.Equal(t, "jolo", cfg.Token)
+
+		client, err := NewClient(cfg)
+		require.NoError(t, err)
+		assert.Nil(t, client.sshSigner)
+		assert.Equal(t, "jolo", string(client.authToken))
 	})
 
 	t.Run("load valid private key", func(t *testing.T) {
 		t.Setenv("SSH_AUTH_SOCK", "")
 		t.Setenv("SERVERADMIN_KEY_PATH", "testdata/test.key")
 
-		resetConfig()
-		cfg, err := loadConfig()
-
+		cfg, err := configFromEnv()
 		require.NoError(t, err)
-		assert.NotNil(t, cfg)
-		assert.Empty(t, cfg.authToken)
+		assert.Equal(t, "testdata/test.key", cfg.KeyPath)
+		assert.Empty(t, cfg.Token)
+
+		client, err := NewClient(cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, client.sshSigner)
+		assert.Empty(t, client.authToken)
 	})
 
-	t.Run("load invalid private Key", func(t *testing.T) {
+	t.Run("load invalid private key", func(t *testing.T) {
 		t.Setenv("SSH_AUTH_SOCK", "")
 		t.Setenv("SERVERADMIN_KEY_PATH", "testdata/nope.key")
 
-		resetConfig()
-		_, err := loadConfig()
+		cfg, err := configFromEnv()
+		require.NoError(t, err)
 
-		assert.Error(t, err, "failed to read private key from testdata/nope.key: open testdata/nope.key: no such file or directory")
+		// The file is read and parsed by NewClient, so the error surfaces there.
+		_, err = NewClient(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to read private key from testdata/nope.key")
 	})
 }

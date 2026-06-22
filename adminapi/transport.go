@@ -24,17 +24,12 @@ const (
 	apiEndpointCommit    = "/api/dataset/commit"
 )
 
-func sendRequest(endpoint string, postData any) (*http.Response, error) {
-	config, err := getConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config: %w", err)
-	}
-
+func (c *Client) sendRequest(ctx context.Context, endpoint string, postData any) (*http.Response, error) {
 	postStr, err := json.Marshal(postData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request data: %w", err)
 	}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, config.baseURL+endpoint, bytes.NewBuffer(postStr))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, bytes.NewBuffer(postStr))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -44,24 +39,24 @@ func sendRequest(endpoint string, postData any) (*http.Response, error) {
 	req.Header.Set("X-Timestamp", strconv.FormatInt(now, 10))
 	req.Header.Set("User-Agent", userAgent)
 
-	if config.sshSigner != nil {
+	if c.sshSigner != nil {
 		// sign with private key or SSH agent
 		messageToSign := calcMessage(now, postStr)
-		signature, sigErr := config.sshSigner.Sign(rand.Reader, messageToSign)
+		signature, sigErr := c.sshSigner.Sign(rand.Reader, messageToSign)
 		if sigErr != nil {
 			return nil, fmt.Errorf("failed to sign request: %w", sigErr)
 		}
-		publicKey := base64.StdEncoding.EncodeToString(config.sshSigner.PublicKey().Marshal())
+		publicKey := base64.StdEncoding.EncodeToString(c.sshSigner.PublicKey().Marshal())
 		sshSignature := base64.StdEncoding.EncodeToString(ssh.Marshal(signature))
 
 		req.Header.Set("X-PublicKeys", publicKey)
 		req.Header.Set("X-Signatures", sshSignature)
-	} else if len(config.authToken) > 0 {
-		req.Header.Set("X-SecurityToken", calcSecurityToken(config.authToken, now, postStr))
-		req.Header.Set("X-Application", calcAppID(config.authToken))
+	} else if len(c.authToken) > 0 {
+		req.Header.Set("X-SecurityToken", calcSecurityToken(c.authToken, now, postStr))
+		req.Header.Set("X-Application", calcAppID(c.authToken))
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("sending request to %s: %w", endpoint, err)
 	}
