@@ -420,7 +420,7 @@ func TestToAnySlice_VariousTypes(t *testing.T) {
 		},
 		{
 			name:     "[]interface{} with mixed types",
-			input:    []interface{}{"str", 42, true},
+			input:    []any{"str", 42, true},
 			expected: []any{"str", 42, true},
 		},
 		{

@@ -47,7 +47,7 @@ func TestParseQuery(t *testing.T) {
 		{
 			name:  "Not Empty filter",
 			query: "hostname=not(empty())",
-			want:  Filters{"hostname": Filter{"Not": Filter{"Empty": []interface{}{}}}},
+			want:  Filters{"hostname": Filter{"Not": Filter{"Empty": []any{}}}},
 		},
 		{
 			name:  "Any multi int",

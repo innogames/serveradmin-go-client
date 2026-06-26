@@ -42,7 +42,7 @@ func TestFilters(t *testing.T) {
 	})
 
 	assert.Equal(t, Filters{
-		"hostname":   Filter{"Not": Filter{"Empty": interface{}(nil)}},
+		"hostname":   Filter{"Not": Filter{"Empty": any(nil)}},
 		"num_cpu":    Filter{"Regexp": ".*GB"},
 		"hypervisor": Filter{"StartsWith": "datacenter-x-"},
 	}, q.filters)
@@ -55,7 +55,7 @@ func TestFromQuery(t *testing.T) {
 	q.OrderBy("num_cpu")
 
 	assert.Equal(t, Filters{
-		"hostname": Filter{"Not": Filter{"Empty": []interface{}{}}},
+		"hostname": Filter{"Not": Filter{"Empty": []any{}}},
 		"num_cpu":  Filter{"Regexp": ".*GB"},
 		"instance": 1,
 	}, q.filters)
