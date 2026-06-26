@@ -3,6 +3,7 @@ package adminapi
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 )
 
@@ -160,9 +161,7 @@ func (s *ServerObject) Delete() {
 // Rollback reverts all local changes, restoring original attribute values.
 func (s *ServerObject) Rollback() {
 	s.deleted = false
-	for key, oldVal := range s.oldValues {
-		s.attributes[key] = oldVal
-	}
+	maps.Copy(s.attributes, s.oldValues)
 	s.oldValues = Attributes{}
 }
 

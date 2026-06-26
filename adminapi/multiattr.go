@@ -1,5 +1,7 @@
 package adminapi
 
+import "slices"
+
 // MultiAttr is a helper type for multi-valued attributes.
 // It provides set-like operations on string slices.
 //
@@ -70,10 +72,5 @@ func (m *MultiAttr) Clear() {
 //	m.Contains("web")   // true
 //	m.Contains("api")   // false
 func (m MultiAttr) Contains(elem string) bool {
-	for _, v := range m {
-		if v == elem {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(m, elem)
 }
